@@ -1,0 +1,19 @@
+bundle:
+  name: shopibricks-paris
+include:
+  - resources/*.yml
+variables:
+  catalog:
+    default: serverless_stable_vwywqi_catalog
+  schema:
+    default: shopibricks_laurent
+  warehouse_id:
+    default: 05f329bec7bdb08b
+workspace:
+  host: https://fevm-serverless-stable-vwywqi.cloud.databricks.com
+  root_path: /Workspace/Users/laurent.fabre@databricks.com/.bundle/shopibricks-paris/${bundle.target}
+targets:
+  fevm:
+    default: true
+    workspace:
+      profile: fevm

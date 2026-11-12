@@ -1,0 +1,8 @@
+resources:
+  dashboards:
+    commerce_dashboard:
+      display_name: ShopiBricks - Commerce intelligence
+      warehouse_id: ${var.warehouse_id}
+      dataset_catalog: ${var.catalog}
+      dataset_schema: ${var.schema}
+      file_path: commerce.lvdash.json

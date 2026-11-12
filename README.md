@@ -1,0 +1,96 @@
+# ShopiBricks
+
+A multi-persona agentic commerce demo built with **React, D3, OpenAI and Databricks**. Explore shopper intent, curate products, inspect real agent handoffs, and complete a human-confirmed sandbox checkout.
+
+[Open the demo](https://shopibricks-paris-7474645565734606.aws.databricksapps.com) · [Architecture](docs/ARCHITECTURE.md) · [Intent atlas](docs/INTENT_ATLAS.md) · [Presentation runbook](docs/RUNBOOK.md)
+
+The hosted demo requires access to its Databricks workspace. This public repository contains the source, synthetic catalog, configuration, documentation and reproducible tests. Local credentials, account-scoped traces and generated deployment reports are excluded.
+
+![ShopiBricks interactive intent atlas, with explicitly fictional example queries](docs/images/atlas-desktop.png)
+
+## Explore
+
+- **Merchant:** an interactive intent atlas with query clusters, product matches, stock/budget/assortment gaps, filters, zoom and export. Inspect a question and try it in the storefront.
+- **Shopper:** four fictional profiles—Camille, Alex, Léa and Noor—with separate bags and conversations, profile-aware discovery, travel and gifting specialists, and explicit checkout approval.
+- **Brand and catalog:** live product dossiers, completeness checks, an internal catalog feed, and editorial, concise and playful brand voices.
+- **Developer:** inspect AG-UI events, MCP tools, agent handoffs, gateway status and ACP-shaped sandbox checkout.
+- **Operations:** live inventory and sandbox orders, plus clearly labeled synthetic streaming analytics.
+
+The copilot is toggleable, the workspace adapts to mobile, and a guided tour connects the shopper, merchant and developer journeys.
+
+## What is real, and what is simulated?
+
+Products, shopper profiles, orders and stream events are fictional. Lakebase reads and writes, model calls, MCP tools and Databricks integrations are real when configured. No payment processor is called.
+
+The atlas offers 72 labeled fictional example questions and a separate view of the current account's recorded shopper activity. Clusters use deterministic TF-IDF and spherical k-means, with D3 for layout. Catalog match scores are lexical relevance estimates—not probabilities, purchases or conversion rates. The live concierge checks prices, inventory and the complete selection budget.
+
+ShopiBricks is the available native storefront. ChatGPT, Perplexity, Gemini, Mistral AI and DeepSeek are shown as **not connected**. Feed export does not publish products or complete merchant onboarding. See [ACP readiness](docs/ACP_READINESS.md).
+
+The public discovery, personalization and clustering themes on [Lemrock](https://www.lemrock.com/) informed the demo's experience. ShopiBricks is independent and does not claim affiliation, algorithm equivalence or commercial performance parity.
+
+## Stack
+
+| Layer | Implementation |
+|---|---|
+| Interface | React 19, TypeScript, Vite, D3 force layout, Lucide, Driver.js |
+| Server | Express, Zod, AG-UI SSE, official MCP SDK |
+| Agents | Concierge, Catalog, Inventory, Checkout and Merchant analyst |
+| Inference | OpenAI Responses through Databricks Unity AI Gateway |
+| Operational data | Lakebase PostgreSQL; transactional stock and idempotent checkout |
+| Analytics | Lakeflow, Delta, Unity Catalog, SQL warehouse, AI/BI and Genie |
+| Retrieval and observability | Hybrid Vector Search and MLflow tracing |
+| Hosting | Databricks Apps |
+
+## Run locally
+
+Use Node.js 22+, Python 3.12+, `uv`, and the Databricks CLI. Authenticate using native OAuth; do not put API tokens in the repository.
+
+```sh
+databricks auth login --host https://<your-workspace> --profile <your-profile>
+cd app
+cp .env.example .env
+# Edit .env to use your profile and provisioned resource identifiers.
+npm ci
+uv sync
+npm run build
+npm run dev
+```
+
+Open `http://localhost:8000`. Run `npm run seed` once against your dedicated demo database to load the fictional product catalog. See [app/README.md](app/README.md) for resource bindings and runtime details.
+
+The checked-in bundle and provisioning helpers describe the original `fevm` reference deployment. Before using another workspace, adapt the host, profile, catalog/schema, resource IDs and source paths in `databricks.yml`, `app/app.yaml`, `resources/`, and `scripts/`. The example environment file contains nonsecret reference metadata; it does not grant access.
+
+```sh
+databricks bundle validate --strict --target fevm --profile fevm
+databricks bundle deploy --target fevm --profile fevm
+bash scripts/deploy-app.sh
+```
+
+Local presentation controls use `docs/deployment.json`, which is ignored by Git. Copy [deployment.example.json](docs/deployment.example.json) and fill in the provisioned IDs. Stream helpers start only bounded demo runs; stop them after presenting.
+
+## Verify
+
+```sh
+npm --prefix app test
+npm --prefix app run build
+cd tests
+npm ci
+SHOPIBRICKS_TEST_URL=http://localhost:8000 npm run verify:atlas
+SHOPIBRICKS_TEST_URL=http://localhost:8000 npm run verify:funnel
+SHOPIBRICKS_TEST_URL=http://localhost:8000 npm run verify:tour
+```
+
+Browser tests use isolated Chrome with explicit API fixtures. Run the application tests first to generate the atlas fixture. Real integration checks are separate and require the configured workspace.
+
+The November 2026 redesign passed 27 TypeScript tests, 61 atlas/persona browser checks, seven checkout recovery scenarios, desktop/mobile tours, and 21 hosted checks. The hosted run verified production asset hashes and captured a real concierge question in the live atlas. See [validation details](docs/VALIDATION.md).
+
+## Repository
+
+- `app/`: frontend, server, shared contracts, product seed and unit tests.
+- `data/`: synthetic stream generation, Lakeflow pipeline and SQL definitions.
+- `resources/`: Databricks bundle resources and reference API payloads.
+- `scripts/`: provisioning, bounded presentation controls and hosted verification.
+- `tests/`: browser and integration regression scripts.
+- `docs/`: architecture, walkthroughs, integration boundaries and selected fixture screenshots.
+
+Brand artwork remains the property of its respective owners; see [asset sources](app/client/public/brand/SOURCES.json). This is a demonstration implementation, with synthetic data and sandbox checkout.

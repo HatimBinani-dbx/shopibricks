@@ -1,0 +1,15 @@
+import { existsSync } from 'node:fs';
+import { createLakebasePool } from '@databricks/lakebase';
+if(existsSync('.env'))process.loadEnvFile('.env');
+const principal=process.argv[process.argv.indexOf('--principal')+1];
+if(!/^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(principal??''))throw new Error('Usage: tsx server/access.ts --principal <app service principal UUID>');
+const pool=createLakebasePool();
+const quote=(s:string)=>'"'+s.replaceAll('"','""')+'"';
+await pool.query(`GRANT USAGE ON SCHEMA shopibricks TO ${quote(principal)}`);
+await pool.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA shopibricks TO ${quote(principal)}`);
+await pool.query(`GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA shopibricks TO ${quote(principal)}`);
+await pool.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA shopibricks GRANT SELECT,INSERT,UPDATE,DELETE ON TABLES TO ${quote(principal)}`);
+await pool.query(`ALTER DEFAULT PRIVILEGES IN SCHEMA shopibricks GRANT USAGE,SELECT ON SEQUENCES TO ${quote(principal)}`);
+const proof=await pool.query("SELECT tablename,has_table_privilege($1,format('%I.%I',schemaname,tablename),'SELECT,INSERT,UPDATE,DELETE') AS accessible FROM pg_tables WHERE schemaname='shopibricks' ORDER BY tablename",[principal]);
+console.log(JSON.stringify({principal,tables:proof.rows,ownership:'unchanged'}));
+await pool.end();

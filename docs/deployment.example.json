@@ -1,0 +1,14 @@
+{
+  "app_name": "shopibricks-paris",
+  "app_url": "https://<your-app-host>",
+  "catalog": "<your-catalog>",
+  "schema": "<your-demo-schema>",
+  "warehouse_id": "<your-warehouse-id>",
+  "pipeline_id": "<your-pipeline-id>",
+  "stream_job_id": "<your-stream-job-id>",
+  "refresh_job_id": "<your-refresh-job-id>",
+  "genie_space_id": "<your-genie-space-id>",
+  "dashboard_id": "<your-dashboard-id>",
+  "experiment_id": "<your-experiment-id>",
+  "app_service_principal": "<your-app-service-principal-id>"
+}

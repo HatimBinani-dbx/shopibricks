@@ -1,0 +1,12 @@
+import {ArrowRight,Check,ShoppingBag,BarChart3,Code2,Globe,UserRound} from 'lucide-react';
+import {personas,profiles,channels,profileFor,type Experience,type Persona,type ProfileId,type ChannelId} from '../../shared/experience';
+
+export function PersonaBar({persona,onChange,disabled}:{persona:Persona;onChange:(persona:Persona)=>void;disabled:boolean}){
+  const icons={shopper:ShoppingBag,merchant:BarChart3,developer:Code2};
+  return <section className="persona-bar" aria-label="Demo personas"><div><span className="eyebrow">ONE CATALOG. THREE PERSPECTIVES.</span><p>Choose your side of the story.</p></div><div className="persona-options">{personas.map(p=>{const Icon=icons[p.id];return <button key={p.id} aria-label={`${p.label} ${p.name}`} aria-pressed={persona===p.id} disabled={disabled} onClick={()=>onChange(p.id)}><Icon size={17}/><span><strong>{p.label}</strong><small>{p.name}</small></span>{persona===p.id?<Check size={15}/>:<ArrowRight size={15}/>}</button>;})}</div><span className="persona-disclosure">Demo views · same signed-in permissions</span></section>;
+}
+
+export function ShopperProfiles({experience,onProfile,onChannel,disabled}:{experience:Experience;onProfile:(profile:ProfileId)=>void;onChannel:(channel:ChannelId)=>void;disabled:boolean}){
+  const profile=profileFor(experience.profile);
+  return <section className="profile-section" aria-label="Shopper profiles"><div className="profile-heading"><div><span className="eyebrow">A DIFFERENT PERSON. A DIFFERENT POSSIBILITY.</span><h2>Who are we shopping for?</h2></div><span className="demo-chip">Fictional profiles</span></div><div className="profile-options">{profiles.map(p=><button key={p.id} disabled={disabled} aria-pressed={p.id===profile.id} onClick={()=>onProfile(p.id)}><span className="profile-avatar">{p.initials}</span><strong>{p.name}</strong><span>{p.title.replace('The ','')}</span><small>Up to €{p.budget/100}</small></button>)}</div><div className="profile-context"><UserRound size={16}/><div><strong>{profile.context}</strong><span>Seeded demo history: {profile.history}</span></div></div><div className="channel-picker"><label htmlFor="experience-channel"><Globe size={15}/> Shopping experience</label><select id="experience-channel" value={experience.channel} onChange={e=>onChannel(e.target.value as ChannelId)} disabled={disabled}>{channels.map(c=><option key={c.id} value={c.id}>{c.label}</option>)}</select><small>{channels.find(c=>c.id===experience.channel)!.description}</small></div></section>;
+}

@@ -1,0 +1,11 @@
+{
+  "name": "serverless_stable_vwywqi_catalog.shopibricks_laurent.products_index",
+  "endpoint_name": "shopibricks-paris",
+  "primary_key": "id",
+  "index_type": "DELTA_SYNC",
+  "delta_sync_index_spec": {
+    "source_table": "serverless_stable_vwywqi_catalog.shopibricks_laurent.products",
+    "embedding_source_columns": [{"name": "content", "embedding_model_endpoint_name": "databricks-gte-large-en"}],
+    "pipeline_type": "TRIGGERED"
+  }
+}

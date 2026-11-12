@@ -1,0 +1,17 @@
+resources:
+  pipelines:
+    commerce:
+      name: ShopiBricks - commerce streaming
+      catalog: ${var.catalog}
+      schema: ${var.schema}
+      serverless: true
+      continuous: false
+      channel: CURRENT
+      libraries:
+        - file:
+            path: ../data/commerce_pipeline.py
+      configuration:
+        shopibricks.catalog: ${var.catalog}
+        shopibricks.schema: ${var.schema}
+        pipelines.numUpdateRetryAttempts: "0"
+        pipelines.maxFlowRetryAttempts: "0"

@@ -1,0 +1,37 @@
+{
+  "name": "shopibricks",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch server/index.ts",
+    "build": "tsc --noEmit && vite build",
+    "start": "tsx server/index.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "seed": "tsx server/seed.ts"
+  },
+  "dependencies": {
+    "@ag-ui/core": "latest",
+    "@databricks/lakebase": "0.7.0",
+    "@modelcontextprotocol/sdk": "latest",
+    "d3-force": "^3.0.1",
+    "driver.js": "1.4.0",
+    "express": "4.22.3",
+    "lucide-react": "latest",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "tsx": "latest",
+    "zod": "4.6.6"
+  },
+  "devDependencies": {
+    "@types/express": "4.17.25",
+    "@types/node": "latest",
+    "@types/pg": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "@vitejs/plugin-react": "latest",
+    "typescript": "latest",
+    "vite": "latest",
+    "@types/d3-force": "^3.0.10"
+  }
+}

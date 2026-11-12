@@ -1,0 +1,45 @@
+/** Driver.js navigation, highlights and checkout safety with controlled API fixtures. */
+import assert from 'node:assert/strict';
+import {chromium} from 'playwright';
+import {mkdir,writeFile} from 'node:fs/promises';
+import {fileURLToPath} from 'node:url';
+const base=process.env.SHOPIBRICKS_TEST_URL||'http://localhost:8000';
+const artifacts=fileURLToPath(new URL(`./artifacts/tour-${new Date().toISOString().replace(/[:.]/g,'-')}/`,import.meta.url));await mkdir(artifacts,{recursive:true});
+const browser=await chromium.launch({channel:'chrome',headless:true});const context=await browser.newContext({viewport:{width:1440,height:1000},reducedMotion:'reduce'});const page=await context.newPage();page.setDefaultTimeout(10000);
+const errors=[];page.on('pageerror',e=>errors.push(e.message));const writes=[];const checks=[];
+const product={id:'sb-notebook',name:'Atelier Notebook',category:'Everyday',description:'A notebook.',price_cents:1900,currency:'eur',stock:3,color:'#dfad68',image_kind:'notebook',tags:[]};
+const quote={id:'cs_tour',status:'ready_for_payment',currency:'eur',items:[{id:product.id,quantity:1}],buyer:{name:'Camille Martin',email:'camille@example.test'},fulfillment_address:{name:'Camille Martin',line_one:'10 Rue de Rivoli',city:'Paris',postal_code:'75001',country:'FR'},line_items:[{id:'li_tour',item:{id:product.id,quantity:1},base_amount:1583,subtotal:1583,tax:317,discount:0,total:1900}],totals:[{type:'subtotal',display_text:'Subtotal before VAT',amount:1583},{type:'tax',display_text:'VAT (20%)',amount:317},{type:'fulfillment',display_text:'Delivery',amount:0},{type:'total',display_text:'Total',amount:1900}],messages:[],fulfillment_options:[],links:[]};
+const saved={...quote,status:'completed',order:{id:'ord_tour',checkout_session_id:quote.id,permalink_url:`${base}/?order=ord_tour`}};
+await page.route('**/api/**',async route=>{const request=route.request(),path=new URL(request.url()).pathname;const json=body=>route.fulfill({json:body});if(request.method()!=='GET')writes.push(path);
+ if(path==='/api/products')return json({products:[product]});
+ if(path==='/api/health')return json({database:'connected',gateway:'configured',model:'OpenAI demo model'});
+ if(path==='/api/whoami')return json({label:'Tour fixture'});
+ if(path==='/api/operations')return json({metrics:{orders:1,revenue_cents:1900},orders:[{id:'ord_tour',total_cents:1900,status:'confirmed',created_at:new Date().toISOString()}],inventory:[product],events:[],source:'Lakebase fixture',as_of:new Date().toISOString()});
+ if(path==='/api/lakehouse')return json({daily:[],demand:[],sql:'SELECT fixture',source:'Fixture',queried_at:new Date().toISOString()});
+ if(path==='/api/catalog/readiness')return json({items:[],total:0,ready:0,available:0,source:'Fixture',as_of:new Date().toISOString()});
+ if(path==='/api/intelligence')return json({source:'examples',as_of:new Date().toISOString(),queries:[],clusters:[],summary:{queries:0,clusters:0,matched:0,gaps:0,products:1}});
+ if(path==='/api/insights')return json({requests:0,recommended:0,drafts:0,gaps:0,failed:0,completed:0,intents:[],latest_at:null,as_of:new Date().toISOString(),scope:'Fixture',source:'Fixture'});
+ if(path==='/api/events')return json({events:[]});
+ if(path==='/api/checkout')return json(quote);
+ if(path==='/api/orders/ord_tour')return json(saved);
+ throw new Error(`Tour unexpectedly requested ${request.method()} ${path}`);
+});
+const mainTargets=['.hero-cta','.section-top','.agent-roster','.composer','.bag-button','.metric-grid','.traffic-panel','.orders-panel','.protocol-cards','.protocol-log','.persona-bar','.profile-section','.brand-studio','.distribution-panel','.intent-panel','.presentation-button'];
+async function step(target,index,count){
+ await page.waitForFunction(selector=>document.querySelector(selector)?.classList.contains('driver-active-element')&&document.querySelector(selector)?.inert,target);
+ await page.waitForFunction(expected=>document.querySelector('.driver-popover-progress-text')?.textContent?.trim()===expected,`${index+1} / ${count}`);
+ const box=await page.locator('.driver-popover').boundingBox();const viewport=page.viewportSize();
+ assert.ok(box&&box.x>=0&&box.y>=0&&box.x+box.width<=viewport.width+1&&box.y+box.height<=viewport.height+1,`Tour popover outside ${viewport.width}px viewport at ${target}: ${JSON.stringify(box)}`);
+}
+async function walk(targets,prefix){for(let i=0;i<targets.length;i++){await step(targets[i],i,targets.length);if([0,5,8].includes(i))await page.screenshot({path:`${artifacts}/${prefix}-${i}.png`});await page.getByRole('button',{name:i===targets.length-1?'Finish tour':'Next tour step',exact:true}).click();}await page.locator('.driver-popover').waitFor({state:'hidden'});assert.equal(await page.locator('.driver-active-element, [inert]').count(),0);}
+try{
+ await page.goto(`${base}/?product=`);await page.getByRole('button',{name:'Add Atelier Notebook to bag',exact:true}).waitFor();
+ await page.getByRole('button',{name:'Take a tour',exact:true}).click();await walk(mainTargets,'desktop');assert.equal(writes.length,0);checks.push('All 16 desktop steps highlight real targets across Shop, Growth studio, Operations and Protocol studio without mutations');
+ await page.getByRole('button',{name:'Commerce operations',exact:true}).click();await page.getByRole('button',{name:'Take a tour',exact:true}).click();await step(mainTargets[0],0,mainTargets.length);await page.getByRole('button',{name:'Next tour step',exact:true}).click();await step(mainTargets[1],1,mainTargets.length);await page.getByRole('button',{name:'Previous tour step',exact:true}).click();await step(mainTargets[0],0,mainTargets.length);await page.keyboard.press('Escape');await page.locator('.driver-popover').waitFor({state:'hidden'});assert.equal(await page.getByRole('button',{name:'Commerce operations',exact:true}).getAttribute('aria-current'),'page');assert.equal(await page.getByRole('button',{name:'Take a tour',exact:true}).evaluate(e=>e===document.activeElement),true);checks.push('Previous, Escape, original-view restoration and trigger focus work');
+ await page.setViewportSize({width:320,height:844});assert.equal(await page.evaluate(()=>{const header=document.querySelector('.workspace-sidebar').getBoundingClientRect();const nav=document.querySelector('.workspace-sidebar nav').getBoundingClientRect();return nav.bottom<=header.bottom+1;}),true,'Mobile navigation must fit inside its header');await page.getByRole('button',{name:'Take a tour',exact:true}).click();await walk(mainTargets,'mobile');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);checks.push('All 16 tour steps fit a 320px mobile viewport');
+ await page.setViewportSize({width:1440,height:1000});await page.emulateMedia({reducedMotion:'no-preference'});await page.getByRole('button',{name:'Take a tour',exact:true}).click();await walk(mainTargets,'animated');await page.emulateMedia({reducedMotion:'reduce'});await page.getByRole('button',{name:'Storefront',exact:true}).click();await page.getByRole('button',{name:'Add Atelier Notebook to bag',exact:true}).click();await page.getByRole('button',{name:'Review bag, 1 items'}).click();await page.getByRole('button',{name:'Guide me',exact:true}).click();await walk(['.bag-items','.delivery-form','.drawer-footer'],'checkout');assert.equal(writes.length,0);checks.push('Checkout guide highlights selection, details and review without creating a quote');
+ await page.getByRole('dialog').getByRole('button',{name:'Review checkout',exact:true}).click();await page.getByRole('checkbox').waitFor();assert.deepEqual(writes,['/api/checkout']);await page.getByRole('button',{name:'Guide me',exact:true}).click();await page.keyboard.press('Escape');await page.locator('.driver-popover').waitFor({state:'hidden'});assert.equal(await page.getByRole('dialog').isVisible(),true);assert.equal(await page.getByRole('checkbox').isChecked(),false);assert.equal(await page.getByRole('button',{name:'Confirm sandbox order',exact:true}).isDisabled(),true);assert.deepEqual(writes,['/api/checkout']);checks.push('Exiting the guide preserves the checkout drawer and leaves approval unchecked');
+ await page.keyboard.press('Escape');await page.getByRole('dialog').waitFor({state:'hidden'});await page.goto(`${base}/?order=ord_tour`);await page.getByRole('heading',{name:'Your saved order.',exact:true}).waitFor();await page.getByRole('button',{name:'Guide to this receipt',exact:true}).click();await walk(['.receipt-reference','.receipt-items','.receipt-totals','.receipt-delivery'],'receipt');assert.deepEqual(writes,['/api/checkout']);checks.push('Receipt guide highlights persisted details without another checkout');
+ assert.deepEqual(errors,[]);
+}catch(error){checks.push({error:String(error)});await page.screenshot({path:`${artifacts}/failure.png`,fullPage:true});}
+const passed=checks.length===6&&checks.every(c=>typeof c==='string');await writeFile(`${artifacts}/results.json`,JSON.stringify({passed,checks,errors},null,2));await browser.close();console.log(JSON.stringify({passed,checks,errors,artifacts},null,2));process.exitCode=passed?0:1;

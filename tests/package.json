@@ -1,0 +1,18 @@
+{
+  "name": "shopibricks-browser-verification",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "verify": "node verify-atlas.mjs",
+    "verify:receipt": "node verify-receipt.mjs",
+    "verify:funnel": "node verify-funnel.mjs",
+    "verify:tour": "node verify-tour.mjs",
+    "verify:personas": "node verify-personas.mjs",
+    "verify:personas:live": "node verify-experience-live.mjs",
+    "verify:atlas": "node verify-atlas.mjs",
+    "verify:legacy": "node verify-browser.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.65.0-alpha-2026-11-02"
+  }
+}

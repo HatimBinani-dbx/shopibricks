@@ -1,0 +1,26 @@
+resources:
+  jobs:
+    stream:
+      name: ShopiBricks - bounded live event emitter
+      max_concurrent_runs: 1
+      timeout_seconds: 4800
+      parameters:
+        - name: minutes
+          default: "3"
+        - name: history_rows
+          default: "0"
+        - name: catalog
+          default: ${var.catalog}
+        - name: schema
+          default: ${var.schema}
+        - name: pipeline_id
+          default: ${resources.pipelines.commerce.id}
+      tasks:
+        - task_key: emit
+          notebook_task:
+            notebook_path: ../data/generate_events.py
+          environment_key: serverless
+      environments:
+        - environment_key: serverless
+          spec:
+            environment_version: "4"

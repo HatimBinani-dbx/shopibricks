@@ -1,0 +1,34 @@
+command: ["npm", "start"]
+env:
+  - name: NODE_ENV
+    value: production
+  - name: SHOPIBRICKS_MODEL
+    value: system.ai.gpt-6-luna
+  - name: SHOPIBRICKS_CATALOG
+    value: serverless_stable_vwywqi_catalog
+  - name: SHOPIBRICKS_SCHEMA
+    value: shopibricks_laurent
+  - name: DATABRICKS_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: LAKEBASE_ENDPOINT
+    valueFrom: postgres
+  - name: MLFLOW_EXPERIMENT_ID
+    valueFrom: mlflow
+  - name: MLFLOW_ASYNC_TRACE_LOGGING_RETRY_TIMEOUT
+    value: "15"
+  - name: SHOPIBRICKS_TRACE_TABLE_PREFIX
+    value: serverless_stable_vwywqi_catalog.shopibricks_laurent.agent_traces
+  - name: MLFLOW_TRACING_SQL_WAREHOUSE_ID
+    valueFrom: sql-warehouse
+  - name: SHOPIBRICKS_PUBLIC_URL
+    value: https://shopibricks-paris-7474645565734606.aws.databricksapps.com
+  - name: SHOPIBRICKS_VECTOR_INDEX
+    value: serverless_stable_vwywqi_catalog.shopibricks_laurent.products_index
+  - name: SHOPIBRICKS_GENIE_SPACE_ID
+    value: 01f1da3bc13e13deb495675656b7255f
+  - name: SHOPIBRICKS_STREAM_JOB_ID
+    valueFrom: stream-job
+  - name: SHOPIBRICKS_REFRESH_JOB_ID
+    valueFrom: refresh-job
+  - name: SHOPIBRICKS_PIPELINE_ID
+    value: c4f93558-a9f6-49fd-ae0a-758a4d799bdf

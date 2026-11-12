@@ -1,0 +1,412 @@
+{
+  "datasets": [
+    {
+      "name": "daily",
+      "displayName": "Daily",
+      "queryLines": [
+        "SELECT event_date, SUM(revenue_cents)/100.0 AS revenue_eur, SUM(purchases) AS purchases, SUM(stockouts) AS stockouts FROM gold_commerce_daily GROUP BY event_date ORDER BY event_date"
+      ]
+    },
+    {
+      "name": "channels",
+      "displayName": "Channels",
+      "queryLines": [
+        "SELECT channel, SUM(revenue_cents)/100.0 AS revenue_eur, SUM(purchases) AS purchases FROM gold_commerce_daily GROUP BY channel ORDER BY revenue_eur DESC"
+      ]
+    },
+    {
+      "name": "demand",
+      "displayName": "Demand",
+      "queryLines": [
+        "SELECT name, category, SUM(purchases) AS purchases, SUM(stockouts) AS stockouts, SUM(revenue_at_risk_cents)/100.0 AS revenue_at_risk_eur FROM gold_product_demand GROUP BY name,category ORDER BY revenue_at_risk_eur DESC"
+      ]
+    }
+  ],
+  "pages": [
+    {
+      "name": "commerce",
+      "displayName": "Commerce",
+      "pageType": "PAGE_TYPE_CANVAS",
+      "layoutVersion": "GRID_V1",
+      "layout": [
+        {
+          "widget": {
+            "name": "title",
+            "multilineTextboxSpec": {
+              "lines": [
+                "# ShopiBricks \u00b7 Commerce intelligence"
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 0,
+            "width": 12,
+            "height": 1
+          }
+        },
+        {
+          "widget": {
+            "name": "subtitle",
+            "multilineTextboxSpec": {
+              "lines": [
+                "Synthetic traffic \u00b7 EUR including VAT \u00b7 Auto Loader \u2192 Lakeflow \u2192 Unity Catalog. Stockout exposure is a scenario estimate, not lost booked revenue."
+              ]
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 1,
+            "width": 12,
+            "height": 2
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi-revenue_eur",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "daily",
+                  "fields": [
+                    {
+                      "name": "sum(revenue_eur)",
+                      "expression": "SUM(`revenue_eur`)"
+                    },
+                    {
+                      "name": "day",
+                      "expression": "DATE_TRUNC(\"DAY\", `event_date`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(revenue_eur)",
+                  "displayName": "Synthetic revenue \u00b7 EUR",
+                  "format": {
+                    "type": "number-currency",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    },
+                    "currencyCode": "EUR"
+                  }
+                },
+                "period": {
+                  "fieldName": "day"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Synthetic revenue \u00b7 EUR"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 3,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi-purchases",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "daily",
+                  "fields": [
+                    {
+                      "name": "sum(purchases)",
+                      "expression": "SUM(`purchases`)"
+                    },
+                    {
+                      "name": "day",
+                      "expression": "DATE_TRUNC(\"DAY\", `event_date`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(purchases)",
+                  "displayName": "Synthetic purchase events",
+                  "format": {
+                    "type": "number",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                },
+                "period": {
+                  "fieldName": "day"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Synthetic purchase events"
+              }
+            }
+          },
+          "position": {
+            "x": 4,
+            "y": 3,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "kpi-stockouts",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "daily",
+                  "fields": [
+                    {
+                      "name": "sum(stockouts)",
+                      "expression": "SUM(`stockouts`)"
+                    },
+                    {
+                      "name": "day",
+                      "expression": "DATE_TRUNC(\"DAY\", `event_date`)"
+                    }
+                  ],
+                  "disaggregated": false
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "counter",
+              "encodings": {
+                "value": {
+                  "fieldName": "sum(stockouts)",
+                  "displayName": "Stockout events",
+                  "format": {
+                    "type": "number",
+                    "abbreviation": "compact",
+                    "decimalPlaces": {
+                      "type": "max",
+                      "places": 1
+                    }
+                  }
+                },
+                "period": {
+                  "fieldName": "day"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Stockout events"
+              }
+            }
+          },
+          "position": {
+            "x": 8,
+            "y": 3,
+            "width": 4,
+            "height": 3
+          }
+        },
+        {
+          "widget": {
+            "name": "revenue-trend",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "daily",
+                  "fields": [
+                    {
+                      "name": "event_date",
+                      "expression": "`event_date`"
+                    },
+                    {
+                      "name": "revenue_eur",
+                      "expression": "`revenue_eur`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "event_date",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "revenue_eur",
+                  "scale": {
+                    "type": "quantitative"
+                  },
+                  "displayName": "EUR"
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Synthetic daily revenue"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 6,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "stockout-trend",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "daily",
+                  "fields": [
+                    {
+                      "name": "event_date",
+                      "expression": "`event_date`"
+                    },
+                    {
+                      "name": "stockouts",
+                      "expression": "`stockouts`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 3,
+              "widgetType": "line",
+              "encodings": {
+                "x": {
+                  "fieldName": "event_date",
+                  "scale": {
+                    "type": "temporal"
+                  }
+                },
+                "y": {
+                  "fieldName": "stockouts",
+                  "scale": {
+                    "type": "quantitative"
+                  }
+                }
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "The campaign creates a stockout spike"
+              }
+            }
+          },
+          "position": {
+            "x": 6,
+            "y": 6,
+            "width": 6,
+            "height": 5
+          }
+        },
+        {
+          "widget": {
+            "name": "product-demand",
+            "queries": [
+              {
+                "name": "main_query",
+                "query": {
+                  "datasetName": "demand",
+                  "fields": [
+                    {
+                      "name": "name",
+                      "expression": "`name`"
+                    },
+                    {
+                      "name": "category",
+                      "expression": "`category`"
+                    },
+                    {
+                      "name": "purchases",
+                      "expression": "`purchases`"
+                    },
+                    {
+                      "name": "stockouts",
+                      "expression": "`stockouts`"
+                    },
+                    {
+                      "name": "revenue_at_risk_eur",
+                      "expression": "`revenue_at_risk_eur`"
+                    }
+                  ],
+                  "disaggregated": true
+                }
+              }
+            ],
+            "spec": {
+              "version": 2,
+              "widgetType": "table",
+              "encodings": {
+                "columns": [
+                  {
+                    "fieldName": "name",
+                    "displayName": "Product"
+                  },
+                  {
+                    "fieldName": "category",
+                    "displayName": "Category"
+                  },
+                  {
+                    "fieldName": "purchases",
+                    "displayName": "Purchases"
+                  },
+                  {
+                    "fieldName": "stockouts",
+                    "displayName": "Stockouts"
+                  },
+                  {
+                    "fieldName": "revenue_at_risk_eur",
+                    "displayName": "Exposure EUR"
+                  }
+                ]
+              },
+              "frame": {
+                "showTitle": true,
+                "title": "Product availability exposure"
+              }
+            }
+          },
+          "position": {
+            "x": 0,
+            "y": 11,
+            "width": 12,
+            "height": 6
+          }
+        }
+      ]
+    }
+  ]
+}

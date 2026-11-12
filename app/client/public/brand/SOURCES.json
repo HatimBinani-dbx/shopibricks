@@ -1,0 +1,11 @@
+{
+  "databricks": {
+    "source": "https://www.databricks.com/",
+    "asset": "Official header logo; original SVG geometry and colors preserved"
+  },
+  "openai": {
+    "source": "https://openai.com/brand/",
+    "download": "https://cdn.openai.com/brand/openai-logos.zip",
+    "asset": "Official wordmark and Blossom SVGs, black and white"
+  }
+}

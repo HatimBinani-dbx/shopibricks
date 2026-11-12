@@ -1,0 +1,64 @@
+{
+  "name": "shopibricks-paris",
+  "description": "ShopiBricks · OpenAI Paris · synthetic headless commerce with governed multi-agent UI",
+    "resources": [
+      {
+        "name": "postgres",
+        "postgres": {
+          "branch": "projects/shopibricks-paris/branches/production",
+          "database": "projects/shopibricks-paris/branches/production/databases/databricks-postgres",
+          "permission": "CAN_CONNECT_AND_CREATE"
+        }
+      },
+      {
+        "name": "sql-warehouse",
+        "sql_warehouse": {
+          "id": "05f329bec7bdb08b",
+          "permission": "CAN_USE"
+        }
+      },
+      {
+        "name": "openai-model",
+        "serving_endpoint": {
+          "name": "databricks-gpt-6-luna",
+          "permission": "CAN_QUERY"
+        }
+      },
+      {
+        "experiment": {
+          "experiment_id": "588811517474050",
+          "permission": "CAN_EDIT"
+        },
+        "name": "mlflow"
+      },
+      {
+        "name": "products-index",
+        "uc_securable": {
+          "permission": "SELECT",
+          "securable_full_name": "serverless_stable_vwywqi_catalog.shopibricks_laurent.products_index",
+          "securable_type": "TABLE"
+        }
+      },
+      {
+        "job": {
+          "id": "701452676363557",
+          "permission": "CAN_MANAGE_RUN"
+        },
+        "name": "stream-job"
+      },
+      {
+        "job": {
+          "id": "509791685811786",
+          "permission": "CAN_MANAGE_RUN"
+        },
+        "name": "refresh-job"
+      },
+      {
+        "name": "genie-space",
+        "genie_space": {
+          "space_id": "01f1da3bc13e13deb495675656b7255f",
+          "permission": "CAN_RUN"
+        }
+      }
+    ]
+}
