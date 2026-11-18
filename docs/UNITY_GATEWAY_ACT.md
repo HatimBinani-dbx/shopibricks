@@ -24,7 +24,7 @@ Operations analytics (Lakeflow pipeline, Genie, Vector Search, AI/BI dashboard) 
 | 25:00 to 36:00 | Concierge, then checkout (unchanged, compressed) | Same as the existing runbook. |
 | 36:00 to 38:00 | Developer studio, Protocols | One tool call, one model event. "Every model call you just saw went through one gateway." |
 | 38:00 to 42:00 | Unity Gateway | The map: who calls (app agents, developers, business users, Agent Bricks), what is governed (model services, MCP services, UC data). Then the six controls of the concierge service, read live. Click **GPT-6.1 Terra** under "Promote a model to primary", ask the concierge again, switch back to Luna. No code change, no redeploy. |
-| 42:00 to 46:00 | Model lab | "Cost per successful task, not price per token." Scatter, ranking, heatmap. Run **Prompt injection in catalog** live on Luna, Terra, gpt-oss-120b and one anonymized model: gpt-oss-120b usually follows the injected instruction, which leads to guardrails. Close with the three public benchmarks. |
+| 42:00 to 46:00 | Model lab | "Cost per successful task, not price per token." Run the injected catalog scenario, inspect actual outcomes, enable the GPT application catalog guard and compare the protected rerun. Open real inference payloads. See [interactive studio guide](developer-studio.md). |
 | 46:00 to 49:00 | Terminal, then Codex tab | `scripts/codex-showcase.sh` and ask Codex something about the repo. Explain identity, allow-list, limits, attribution. Show sessions in the Codex tab (usage lands with a delay of a few minutes, so show a session started before the talk). |
 | 49:00 to 50:00 | Back to the shopper journey | Questions. |
 
@@ -62,17 +62,10 @@ Read it carefully on stage:
 
 - This task is easy for frontier models: several reach 100%. The differentiator is cost per success, where GPT-6.1 Terra is about 21x cheaper than Claude Opus 5.5 for the same score, and GPT-6 Luna is the cheapest overall.
 - GPT-6 Luna's misses are arithmetic on the three-item basket (stated total differs from the real sum). The server-side total check in the app is exactly the safeguard for this.
-- GPT-6 Astra is not the cost winner on this task. Its strength is harder work (Terminal-Bench, OfficeQA Pro), as the public benchmarks show.
+- GPT-6 Astra is not the cost winner on this task. Its strength is harder work (Terminal-Bench, OfficeQA Pro), for a separate evaluation.
 - gpt-oss-120b followed the injected catalog instruction in 3 of 3 runs.
-- The app anonymizes non-OpenAI models by default (toggle in the Model lab header).
+- The app anonymizes non-OpenAI models by default (toggle inside collapsed Presenter settings).
 
-## Public benchmarks shown
-
-- [Databricks AI Index](https://www.databricks.com/blog/introducing-databricks-ai-index-state-enterprise-ai-tokenomics): GPT-6 Luna 89.1% task success at about $0.05 per task, the same success as Claude Opus 5.5 at $1.62. Claude Fable 5.1 scores higher (96.0%) at $7.47.
-- [OfficeQA Pro V2](https://www.databricks.com/blog/introducing-officeqa-pro-v2-new-benchmark-enterprise-grounded-reasoning): GPT-5.6 Sol on Codex 33.3% at $4.70 per rollout versus Sonnet 5 on Claude Code 15.6% at $5.01.
-- [GPT-6 Astra announcement](https://openai.com/index/gpt-6-astra-next-generation-work/) (OpenAI): Terminal-Bench 4.0 57.9% versus 37.3% for GPT-5.6 Sol at about 9% lower cost per task, and a Databricks quote on OfficeQA Pro without figures.
-
-No published source measures execution time. Do not claim "faster" from these benchmarks; use the latency measured in the Model lab.
 
 ## Before the talk
 
@@ -80,4 +73,4 @@ No published source measures execution time. Do not claim "faster" from these be
 - Start one Codex session with `scripts/codex-showcase.sh` beforehand for the same reason.
 - Confirm the concierge's primary route is back on GPT-6 Luna after rehearsal.
 - Smart Routing is supported for the Claude Code harness only, not Codex: do not present it as a Codex feature.
-- Guardrails (service policies, Beta) are described but not configured on the concierge service.
+- Native service policies are not attached. The lab runs a real GPT application catalog guard; see developer-studio.md.

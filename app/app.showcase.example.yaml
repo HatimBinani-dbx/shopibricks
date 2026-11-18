@@ -24,3 +24,9 @@ env:
     value: https://<app-url>
   - name: SHOPIBRICKS_UG_USAGE_TABLE   # optional workspace-scoped view over system.ai_gateway.usage
     value: <catalog>.<schema>.gateway_usage
+
+  # Optional live lab services, provisioned with inference tables (see docs/developer-studio.md).
+  - name: SHOPIBRICKS_LAB_SERVICE_PREFIX
+    value: <catalog>.<schema>.lab_
+  - name: SHOPIBRICKS_RATE_DEMO_SERVICE
+    value: <catalog>.<schema>.rate_demo

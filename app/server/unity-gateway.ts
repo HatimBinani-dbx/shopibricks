@@ -48,7 +48,7 @@ export async function usage(window:keyof typeof WINDOWS,force=false){
   services:`SELECT service_name, destination_model, count(*) AS requests, sum(input_tokens) AS input_tokens, sum(output_tokens) AS output_tokens, percentile_approx(latency_ms,0.5) AS p50_ms, percentile_approx(latency_ms,0.95) AS p95_ms, sum(CASE WHEN status_code>=400 THEN 1 ELSE 0 END) AS errors, sum(CASE WHEN status_code=429 THEN 1 ELSE 0 END) AS throttled, sum(CASE WHEN size(routing_information.attempts)>1 THEN 1 ELSE 0 END) AS rerouted, max(event_time) AS last_event FROM ${usageTable()} WHERE ${scope} AND service_type='MODEL_SERVICE' GROUP BY 1,2 ORDER BY requests DESC LIMIT 25`,
   consumers:`SELECT ${consumer} AS consumer, count(*) AS requests, count(DISTINCT requester) AS principals, sum(total_tokens) AS tokens, count(DISTINCT session_metadata.client_session_id) AS sessions FROM ${usageTable()} WHERE ${scope} GROUP BY 1 ORDER BY requests DESC`,
   concierge:`SELECT event_time, destination_model, status_code, latency_ms, input_tokens, output_tokens, size(routing_information.attempts) AS attempts, api_type FROM ${usageTable()} WHERE ${scope} AND service_name='${service}' ORDER BY event_time DESC LIMIT 15`,
-  coding:`SELECT requester, session_metadata.coding_agent AS agent, session_metadata.agent_version AS version, session_metadata.client_session_id AS session_id, destination_model, count(*) AS requests, sum(input_tokens) AS input_tokens, sum(output_tokens) AS output_tokens, min(event_time) AS started, max(event_time) AS last_event FROM ${usageTable()} WHERE ${scope} AND session_metadata.coding_agent IS NOT NULL GROUP BY 1,2,3,4,5 ORDER BY last_event DESC LIMIT 20`,
+  coding:`SELECT requester, session_metadata.coding_agent AS agent, session_metadata.agent_version AS version, session_metadata.client_session_id AS session_id, destination_model, count(*) AS requests, sum(input_tokens) AS input_tokens, sum(output_tokens) AS output_tokens, min(event_time) AS started, max(event_time) AS last_event FROM ${usageTable()} WHERE ${scope} AND lower(session_metadata.coding_agent) LIKE '%codex%' AND lower(destination_model) RLIKE '(^|[./-])gpt' GROUP BY 1,2,3,4,5 ORDER BY last_event DESC LIMIT 20`,
  };
  const entries=await Promise.all(Object.entries(queries).map(async([k,q])=>{try{return[k,await sql(q)] as const;}catch(e){return[k,{error:e instanceof Error?e.message:'Query failed'}] as const;}}));
  const data=Object.fromEntries(entries) as Record<string,Record<string,unknown>[]|{error:string}>;
@@ -74,9 +74,27 @@ export function registerUnityGateway(app:Express,wrap:Wrap){
  app.get('/api/ug/usage',wrap(async(req,res)=>{const window=z.enum(['1h','24h','7d']).default('24h').parse(req.query.window);res.json(await usage(window,req.query.refresh==='1'));}));
  app.get('/api/ug/bench',(_req,res)=>{const summary=benchSummary();if(!summary)return res.status(404).json({error:{code:'not_found',message:'No benchmark results are bundled with this build.'}});res.json(summary);});
  app.post('/api/ug/lab',wrap(async(req,res)=>{
-  const input=z.object({scenario:z.enum(LAB_SCENARIOS),models:z.array(z.enum(LAB_MODELS)).min(1).max(4)}).parse(req.body);
+  const input=z.object({scenario:z.enum(LAB_SCENARIOS),models:z.array(z.enum(LAB_MODELS)).min(1).max(4),protection:z.boolean().default(false)}).parse(req.body);
   if(labBusy)return res.status(409).json({error:{code:'busy',message:'A comparison is already running.'}});
-  labBusy=true;try{res.json({...(await gateway({action:'ug_lab',scenario:input.scenario,models:input.models})),ran_at:new Date().toISOString(),via:'Unity Gateway · app service principal'});}finally{labBusy=false;}
+  labBusy=true;try{res.json({...(await gateway({action:'ug_lab',scenario:input.scenario,models:input.models,protection:input.protection})),ran_at:new Date().toISOString(),via:'Unity Gateway · app service principal'});}finally{labBusy=false;}
+ }));
+ app.post('/api/ug/probe',wrap(async(req,res)=>{
+  const {kind}=z.object({kind:z.enum(['identity','rate_limit'])}).parse(req.body);
+  res.json(await gateway({action:'ug_probe',kind}));
+ }));
+ app.post('/api/ug/coding',wrap(async(req,res)=>{
+  const input=z.object({task:z.enum(['review','test','architecture']),model:z.enum(ROUTABLE).default('gpt-6-1-sol')}).parse(req.body);
+  res.json(await gateway({action:'ug_coding',...input}));
+ }));
+ app.get('/api/ug/inference',wrap(async(req,res)=>{
+  const info=await overview();const ms=info.model_service as {config?:{inference_table?:{table?:string}}}|undefined;
+  const configured=ms?.config?.inference_table?.table?.replace(/^tables\//,'');
+  if(!configured||!/^\w+\.\w+\.\w+$/.test(configured))return res.json({rows:[],configured:false});
+  const table=z.enum(['concierge','lab']).default('concierge').parse(req.query.table);
+  const scope=configured.split('.').slice(0,2).join('.');
+  const allowed=table==='concierge'?[configured]:['gpt_6_luna','gpt_6_1_terra','gpt_6_1_sol','gpt_6_astra','gpt_oss_120b'].map(m=>`${scope}.lab_${m}_payload`);
+  const outcomes=await Promise.all(allowed.map(async t=>{try{return await sql(`SELECT event_time, request_id, status_code, latency_ms, destination_model, substring(request,1,16000) AS request, substring(response,1,16000) AS response FROM ${t} WHERE event_time >= current_timestamp()-INTERVAL 7 DAYS ORDER BY event_time DESC LIMIT 8`);}catch(e){return [{error:e instanceof Error?e.message:'Table unavailable',table:t}];}}));
+  res.json({configured:true,source:table==='concierge'?configured:'Lab inference tables',rows:outcomes.flat().filter(r=>!r.error).sort((a,b)=>String(b.event_time).localeCompare(String(a.event_time))).slice(0,20),errors:outcomes.flat().filter(r=>r.error),queried_at:new Date().toISOString()});
  }));
  app.post('/api/ug/route',wrap(async(req,res)=>{
   if(process.env.SHOPIBRICKS_UG_ALLOW_ROUTING!=='1'||modelService().startsWith('system.ai.'))return res.status(403).json({error:{code:'routing_disabled',message:'Live routing changes are disabled for this deployment.'}});

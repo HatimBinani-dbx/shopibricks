@@ -120,8 +120,14 @@ def main(request):
         scenario = ug_bench.scenario(request["scenario"])
         models = [m for m in request["models"] if m in ug_bench.PRICES_DBU][:4]
         with ThreadPoolExecutor(max(len(models), 1)) as pool:
-            rows = list(pool.map(lambda m: ug_bench.run_once(m, scenario, None, request.get("effort", "low")), models))
+            rows = list(pool.map(lambda m: ug_bench.run_once(m, scenario, None, request.get("effort", "low"), protection=request.get("protection", False), service=(os.environ.get("SHOPIBRICKS_LAB_SERVICE_PREFIX", "")+m if os.environ.get("SHOPIBRICKS_LAB_SERVICE_PREFIX") else None)), models))
         emit({"type": "completed", "response": {"scenario": {"id": scenario.id, "title": scenario.title, "prompt": scenario.prompt}, "rows": rows}})
+    elif action == "ug_probe":
+        from ug_showcase import feature_probe
+        emit({"type": "completed", "response": feature_probe(request["kind"])})
+    elif action == "ug_coding":
+        from ug_showcase import coding_task
+        emit({"type": "completed", "response": coding_task(request["task"], request["model"])})
     elif action == "ug_route":
         w = WorkspaceClient()
         service = request["service"]
