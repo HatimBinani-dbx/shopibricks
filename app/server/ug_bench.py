@@ -222,27 +222,16 @@ def call_with_retry(fn, attempts=4):
             time.sleep(2 ** k + random.random())
 
 
-def run_once(model, s: Scenario, profile, effort, max_steps=8, protection=False, service=None):
+def run_once(model, s: Scenario, profile, effort, max_steps=8):
     cat = catalog_for(s)
     trace = {"inventory_checked": set(), "answer": None}
     usage = {"input": 0, "output": 0, "cached": 0, "reasoning": 0}
     c = client(profile)
-    fq = service or f"system.ai.{model}"
-    policy_events = []
-    evidence = []
-    messages = []
+    fq = f"system.ai.{model}"
     t0 = time.monotonic()
     steps = tool_calls = 0
     error = None
     try:
-        if protection and s.inject:
-            from ug_showcase import catalog_guard
-            target = cat[s.inject]
-            verdict = catalog_guard(target["description"])
-            policy_events.append(verdict)
-            if verdict["flagged"]:
-                # Fail closed on the entire untrusted description, retain trusted structured attributes.
-                target["description"] = "Description withheld by catalog security policy. Use structured tags and prices."
         if model in OPENAI_RESPONSES:
             tools = [{"type": "function", "strict": True, **t} for t in TOOLS]
             inp = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": s.prompt}]
@@ -257,16 +246,13 @@ def run_once(model, s: Scenario, profile, effort, max_steps=8, protection=False,
                 calls = [o for o in r.output if o.type == "function_call"]
                 for o in r.output:
                     if o.type == "message":
-                        text = "".join(getattr(x, "text", "") for x in o.content)
-                        messages.append(text)
-                        inp.append({"role": "assistant", "content": text})
+                        inp.append({"role": "assistant", "content": "".join(getattr(x, "text", "") for x in o.content)})
                 if not calls:
                     break
                 for o in calls:
                     tool_calls += 1
                     inp.append({"type": "function_call", "name": o.name, "call_id": o.call_id, "arguments": o.arguments})
                     out = run_tool(o.name, json.loads(o.arguments or "{}"), cat, trace)
-                    evidence.append({"tool": o.name, "arguments": json.loads(o.arguments or "{}"), "result": out})
                     inp.append({"type": "function_call_output", "call_id": o.call_id, "output": json.dumps(out)})
                 if trace["answer"] is not None:
                     break
@@ -282,8 +268,6 @@ def run_once(model, s: Scenario, profile, effort, max_steps=8, protection=False,
                     usage["cached"] += getattr(getattr(u, "prompt_tokens_details", None), "cached_tokens", 0) or 0
                 m = r.choices[0].message
                 # Keep the provider's raw assistant message (e.g. Gemini thought signatures on tool calls).
-                if m.content:
-                    messages.append(m.content)
                 raw = m.model_dump(exclude_none=True)
                 msg = {"role": "assistant", "content": m.content or ""}
                 if raw.get("tool_calls"):
@@ -298,7 +282,6 @@ def run_once(model, s: Scenario, profile, effort, max_steps=8, protection=False,
                     except json.JSONDecodeError:
                         args = {}
                     out = run_tool(tc.function.name, args, cat, trace)
-                    evidence.append({"tool": tc.function.name, "arguments": args, "result": out})
                     msgs.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(out)})
                 if trace["answer"] is not None:
                     break
@@ -309,7 +292,7 @@ def run_once(model, s: Scenario, profile, effort, max_steps=8, protection=False,
     pin, pout, pcache = PRICES_DBU[model]
     uncached = max(usage["input"] - usage["cached"], 0)
     cost = (uncached * pin + usage["cached"] * pcache + usage["output"] * pout) / 1e6 * DBU_USD
-    return {"model": model, "provider": PROVIDER[model], "service": fq, "protection": protection, "policy_events": policy_events, "evidence": evidence, "messages": messages, "scenario": s.id, "pass": ok, "reasons": reasons,
+    return {"model": model, "provider": PROVIDER[model], "scenario": s.id, "pass": ok, "reasons": reasons,
             "latency_s": round(latency, 3), "steps": steps, "tool_calls": tool_calls, "usage": usage,
             "cost_usd": cost, "answer": trace["answer"], "error": error}
 
