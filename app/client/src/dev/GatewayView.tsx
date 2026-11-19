@@ -2,7 +2,7 @@ import React,{useMemo,useState} from 'react';
 import {AlertCircle,ArrowRight,BarChart3,CheckCircle2,ChevronDown,Code2,Database,ExternalLink,FileText,Gauge,KeyRound,Layers,Play,RefreshCw,Route,ShieldAlert,ShieldCheck,Sparkles,Terminal,Users,Wallet,Maximize2,X} from 'lucide-react';
 import {OpenAIMark} from '../Brand';
 import {PayloadList,useGuardrail} from './payloads';
-import {GuardrailStory} from './GuardrailStory';
+import {GuardrailStory,PiiTest} from './GuardrailStory';
 import {api,post} from '../api';
 import {Empty,Waiter,WindowPicker,clock,modelKey,compact,failed,num,prettyModel,rows,secs,shortService,usd,usePresenter,useModelLabel,serviceLabel,OTHER_MODELS,type Overview,type Row,type Usage} from './shared';
 
@@ -50,6 +50,7 @@ export function GatewayView({overview,usage,windowSize,onWindow,onRefresh,onRout
   </div>
   </FocusCtx.Provider>
   <GuardrailStory host={host}/>
+  <PiiTest/>
   <TrafficPanel usage={usage} windowSize={windowSize} host={host}/>
  </>;
 }
@@ -172,7 +173,7 @@ function GuardrailCard({onRun}:{onRun:()=>void}){
  async function send(variant:'attack'|'normal'){setBusy(variant);onRun();try{setRes(await post('/api/ug/try',{demo:'guardrail',variant}));}catch(e){setRes({status:500,latency_ms:0,variant,prompt:'',error:e instanceof Error?e.message:'Failed'});}finally{setBusy(undefined);}}
  const active=!!guardrail?.last_denial;const blocked=!!res?.policy;
  return <Card icon={ShieldCheck} title="Guardrails" status={active?'good':'info'} statusText={active?`Last denial ${clock(guardrail!.last_denial!.event_time)} on ${shortService(guardrail!.service||'')}`:'Service policies · Beta'}>
-  <p>Built-in and custom policies screen requests and responses: jailbreak and prompt injection, unsafe content, sensitive data.</p>
+  <p>Built-in and custom policies screen requests and responses: jailbreak and prompt injection, unsafe content, sensitive data. Here: Jailbreak denies, PII masks emails and card numbers.</p>
   <div className="ug-try-row"><TryButton busy={busy==='attack'} onClick={()=>void send('attack')}>Send a jailbreak</TryButton><TryButton busy={busy==='normal'} onClick={()=>void send('normal')}>Normal question</TryButton></div>
   {busy&&<Waiter text={busy==='attack'?'Sending a jailbreak through the guarded service…':'Sending a normal question through the guarded service…'} sub="The Jailbreak policy screens the request before the model."/>}
   {res&&<div className={`ug-result-line ${blocked?'bad':res.status<300?'good':'bad'}`}>{blocked?<ShieldAlert size={18}/>:<span className="ug-code-pill">{res.status}</span>}<div><strong>{blocked?'Blocked by Unity Gateway':res.status<300?'Answered by the model':'Error'}</strong><small>{blocked?String((res.policy as Row)?.reason||JSON.stringify(res.policy)).slice(0,140):String(res.text||res.error||'').slice(0,140)}</small></div></div>}

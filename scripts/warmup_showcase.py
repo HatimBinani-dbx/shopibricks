@@ -211,6 +211,14 @@ def main():
         step("Model lab: 4 OpenAI models", lab("weekend", [{"model": m} for m in ("gpt-6-luna", "gpt-6-1-terra", "gpt-6-1-sol", "gpt-6-astra")], "lab", lambda rows: sum(r["pass"] for r in rows) >= 3))
         step("Guardrail story: attack", lab("injection", [{"model": m} for m in ("gpt-oss-120b", "gpt-6-luna", "gpt-6-1-terra", "gpt-6-1-sol")], "attack"))
         step("Guardrail story: guarded rerun", lab("injection", [{"model": "gpt-oss-120b", "guarded": True}], "guarded", lambda rows: rows[0].get("guardrail_fired") and rows[0]["pass"]))
+        def pii():
+            s, b = http("POST", api("/api/ug/try"), {"demo": "pii"})
+            text = need(s, b, "pii").get("text") or ""
+            if "[EMAIL_ADDRESS]" not in text and "[CREDIT_CARD]" not in text:
+                raise RuntimeError(f"no masking in the answer: {text[:160]!r} (is the PII policy attached?)")
+            return f"masked in {b.get('latency_ms', 0) / 1000:.1f} s"
+
+        step("Guardrail: PII masking", pii)
         step("Routing demo policy (again)", split_reset)
 
     # ---------------------------------------------------------------- SQL-backed panels (warehouse and server caches)
@@ -233,6 +241,7 @@ def main():
         ("Guardrail last denial", "/api/ug/guardrail", lambda b: (b.get("last_denial") or {}).get("event_time") or "none yet (ingestion can lag a few minutes)"),
         ("Model lab bench", "/api/ug/bench", lambda b: f"{len(b.get('models', []))} models"),
         ("Operations", "/api/operations", None),
+        ("Lakehouse metrics", "/api/lakehouse?refresh=1", lambda b: f"{len(b.get('daily') or [])} city × channel rows, latest {max((r.get('latest_event_at') or '') for r in b.get('daily') or [{}])[:16]}"),
     ]
     with ThreadPoolExecutor(4) as pool:
         for name, path, check in panels:

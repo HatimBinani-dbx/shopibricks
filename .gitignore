@@ -41,3 +41,4 @@ TASKS.md
 app/app.showcase.yaml
 resources/app-create.showcase.json
 scripts/showcase.local.env
+resources/showcase.provisioned.json

@@ -20,6 +20,8 @@ const state={
  denialAt:'' as string,
 };
 
+const PII_PROMPT='Write a one-line order confirmation for this shopper. Contact: camille.martin@example.com. Payment card: 4111 1111 1111 1111. Quote the contact and the card exactly as they appear in this message.';
+
 function pick(weights:{model:string;pct:number}[]){let r=Math.random()*100;for(const w of weights){if((r-=w.pct)<0)return w.model;}return weights[weights.length-1].model;}
 
 const DENIAL_REASON=(F.guarded_run?.events||[]).find((e:Json)=>e.kind==='guardrail')?.detail||'Jailbreak: content in a tool result tries to override the system instructions and the shopper’s budget.';
@@ -48,6 +50,7 @@ export function simulate(url:string,body?:unknown):Promise<unknown>|undefined{
  switch(path){
   case '/api/ug/overview':return jitter(350).then(()=>({...F.overview,queried_at:now()}));
   case '/api/ug/usage':return jitter(450).then(()=>({...F.usage,window:q.get('window')||'24h',queried_at:now()}));
+  case '/api/ug/received':return jitter(1800).then(()=>({pending:false,table:svc('guarded_oss_payload'),event_time:now(),received:PII_PROMPT.replace(/[\w.+-]+@[\w-]+(?:\.[\w-]+)+/,'[EMAIL_ADDRESS]').replace(/(?:\d[ -]?){13,16}\d?/,'[CREDIT_CARD]')}));
   case '/api/ug/guardrail':return jitter(400).then(()=>({service:svc('guarded_oss'),last_denial:state.denialAt?{event_time:state.denialAt,response:denialPayload().response}:null,queried_at:now()}));
   case '/api/ug/payloads':{
    const guarded=q.get('service')==='guarded';const src=(guarded?F.payloads_guarded:F.payloads_concierge)||{rows:[]};
@@ -66,6 +69,7 @@ export function simulate(url:string,body?:unknown):Promise<unknown>|undefined{
     {label:'Not granted',service:svc('finance_reserved'),status:403,latency_ms:120,error_code:'PERMISSION_DENIED',error:'The caller does not have EXECUTE on this model service.',app_privileges:['READ_METADATA']}]}));
    if(d==='spike')return jitter(1500).then(()=>{state.lastLimitedAt=Date.now();return{demo:d,service:svc('ratelimit_1rpm'),sent:8,seconds:1.4};});
    if(d==='limit')return jitter(600).then(()=>{const t=Date.now();const limited=t-state.lastLimitedAt<60000;if(!limited)state.lastLimitedAt=t;return{demo:d,service:svc('ratelimit_1rpm'),status:limited?429:200,latency_ms:limited?90:820,error_code:limited?'REQUEST_LIMIT_EXCEEDED':undefined};});
+   if(d==='pii')return jitter(3000).then(()=>({demo:d,service:svc('guarded_oss'),prompt:PII_PROMPT,status:200,latency_ms:3140,request_id:uuid(),text:'Thank you for your order! Confirmation sent to "[EMAIL_ADDRESS]" and payment processed with card "[CREDIT_CARD]".'}));
    if(d==='guardrail'){const attack=b.variant!=='normal';return jitter(attack?2300:1600).then(()=>attack?{demo:d,service:svc('guarded_oss'),variant:'attack',status:200,latency_ms:2210,policy:{reason:'Jailbreak: the request asks the model to ignore its instructions.'},text:'This request was blocked by a Unity Gateway service policy.'}:{demo:d,service:svc('guarded_oss'),variant:'normal',status:200,latency_ms:1480,text:'A light canvas tote with a zipped pocket is the most useful accessory for a weekend in Paris.'});}
    if(d==='probe')return jitter(900).then(()=>({demo:d,service:svc('concierge'),status:200,latency_ms:820,request_id:uuid()}));
    return undefined;

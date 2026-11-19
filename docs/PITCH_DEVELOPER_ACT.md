@@ -72,6 +72,9 @@ Action : cliquer **See it stop a real prompt injection** dans la carte Guardrail
 4. **Open the audit trail**.
    > « En haut, la décision de la Gateway : la policy, la phase, la raison. En dessous, l'inference table : seuls les tours propres y figurent. Le tour empoisonné n'a jamais atteint le modèle. »
 
+5. Juste en dessous, panneau **PII never reaches the model** : cliquer **Send an email and a card number** (environ 4 s, puis la preuve de l'inference table en quelques secondes).
+   > « Deuxième garde-fou, même service : une policy PII. L'agent envoie un email et un numéro de carte. Au milieu, ce que le modèle a réellement reçu, lu dans l'inference table : masqué. À droite, sa réponse : il n'a jamais vu les vraies valeurs. Toujours sans toucher au code de l'agent. »
+
 Phrase de repli, si le guardrail ne se déclenche pas en live :
 > « Le modèle n'est pas le seul rempart : la Gateway ajoute une couche que l'on configure une fois, pour tous les agents. »
 
@@ -123,7 +126,7 @@ Rendre la main pour les questions et le cocktail.
 
 - [ ] **15 minutes avant : lancer `scripts/warmup-showcase.sh`** (environ 4 minutes). Le script démarre l'app et le warehouse (arrêt automatique à 2 h), remet le concierge sur GPT-6 Luna avec Sol en fallback, remet la politique de routage par défaut, puis joue une fois chaque démo (concierge, 12 requêtes de routage, identité, rate limit, Model lab, attaque, relance gardée) pour chauffer les modèles et remplir les tables d'usage. Il se termine par une liste de contrôle : tout doit être ✓. Le premier passage à froid peut prendre 2 minutes sur l'attaque ; après, elle prend 10 à 15 s.
 - [ ] Réglages présentateur : anonymisation activée, coûts affichés, animations activées, **Fallback mode désactivé**.
-- [ ] La policy Jailbreak est déjà attachée à `guarded_oss` (phase input, Deny). Le warm-up vérifie qu'elle se déclenche.
+- [ ] Les policies Jailbreak (Deny) et PII (masque emails et cartes) sont attachées à `guarded_oss`. Le warm-up vérifie les deux.
 - [ ] Ouvrir l'app dans le navigateur de présentation et passer une fois sur chaque onglet.
 
 ## Plan B : Fallback mode
@@ -137,6 +140,7 @@ L'onglet Architecture ne dépend pas de la Gateway : il fonctionne dans les deux
 - **Panne simulée** : l'exercice de panne du routage est une simulation. Un vrai fallback ne se déclenche que sur 429 ou 5xx du modèle principal, ce qu'on ne provoque pas en direct.
 - **Rate limit** : la Gateway applique la limite de façon approximative, sur plusieurs répliques. D'où le pic, puis une requête seule pour montrer le 429.
 - **MCP et ACP derrière la Gateway** : l'architecture montre le modèle cible. Les services MCP sont gouvernés par Unity Gateway ; dire « gouvernés », pas « tous les appels d'outils passent aujourd'hui par le même proxy ».
+- **PII** : la policy masque (elle ne refuse pas) les emails et numéros de carte avant le modèle. La requête masquée est celle qui est écrite dans l'inference table.
 - **Guardrails** : les service policies sont en Beta. Un tour refusé n'est pas écrit dans l'inference table, car il n'atteint pas le modèle ; la décision est renvoyée à l'agent avec sa raison.
 - **Benchmarks** : mesurés sur notre tâche, aux prix publics. Aucune source publiée ne mesure le temps d'exécution : ne pas dire « plus rapide ».
 
@@ -150,6 +154,7 @@ L'onglet Architecture ne dépend pas de la Gateway : il fonctionne dans les deux
 | Tokens par tâche : environ 2 800 pour les GPT contre 6 300 pour les autres | idem |
 | gpt-oss-120b suit l'injection 3 fois sur 3 ; les GPT-6 l'ignorent 3 fois sur 3 | idem, scénario `injection` |
 | Relance gardée : refus au 3e tour, tâche réussie en environ 20 s | run live du 19/11 |
+| PII : email et carte masqués avant le modèle, réponse en 3 à 8 s | run live du 19/11 |
 | Session Codex : 87 requêtes, 27 min, 97 % de cache, 2,31 $ au lieu de 23 $ | `system.ai_gateway.usage` |
 
 Les coûts sont estimés aux prix publics Databricks (pay-per-token, $0,07/DBU, AWS us-east-1).

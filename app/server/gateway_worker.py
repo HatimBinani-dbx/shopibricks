@@ -123,7 +123,7 @@ def main(request):
             rows = list(pool.map(lambda r: ug_bench.run_once(r["model"], scenario, None, request.get("effort", "low"), service=r.get("service")), runs))
         emit({"type": "completed", "response": {"scenario": {"id": scenario.id, "title": scenario.title, "prompt": scenario.prompt}, "rows": rows}})
     elif action == "ug_probe":
-        emit({"type": "completed", "response": probe(request["service"], request.get("prompt") or "Reply with one short sentence: which model are you?")})
+        emit({"type": "completed", "response": probe(request["service"], request.get("prompt") or "Reply with one short sentence: which model are you?", int(request.get("max_tokens") or 120))})
     elif action == "ug_burst":
         import time
         n = max(1, min(int(request.get("n", 6)), 10))

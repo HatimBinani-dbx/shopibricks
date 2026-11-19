@@ -24,12 +24,16 @@ env:
     value: https://<app-url>
   - name: SHOPIBRICKS_UG_USAGE_TABLE   # optional workspace-scoped view over system.ai_gateway.usage
     value: <catalog>.<schema>.gateway_usage
-  # Optional: console links to data assets in another workspace
-  - name: SHOPIBRICKS_LINK_DATA_HOST
-    value: https://<reference-workspace>
-  - name: SHOPIBRICKS_LINK_PIPELINE_ID
-    value: <pipeline-id>
-  - name: SHOPIBRICKS_LINK_STREAM_JOB_ID
-    value: "<job-id>"
-  - name: SHOPIBRICKS_LINK_GENIE_SPACE_ID
+  # Analytics assets created by scripts/provision-showcase.sh (values printed in resources/showcase.provisioned.json)
+  - name: SHOPIBRICKS_VECTOR_INDEX
+    value: <catalog>.<schema>.products_index
+  - name: SHOPIBRICKS_GENIE_SPACE_ID
     value: <genie-space-id>
+  - name: SHOPIBRICKS_STREAM_JOB_ID
+    valueFrom: stream-job
+  - name: SHOPIBRICKS_REFRESH_JOB_ID
+    valueFrom: refresh-job
+  - name: SHOPIBRICKS_PIPELINE_ID
+    value: <pipeline-id>
+  # Optional: point the console links to another workspace instead (SHOPIBRICKS_LINK_DATA_HOST,
+  # SHOPIBRICKS_LINK_PIPELINE_ID, SHOPIBRICKS_LINK_STREAM_JOB_ID, SHOPIBRICKS_LINK_GENIE_SPACE_ID).

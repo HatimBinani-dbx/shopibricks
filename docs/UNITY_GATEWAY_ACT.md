@@ -15,7 +15,7 @@ A second deployment runs these views next to the reference app, in its own works
 | MLflow | dedicated experiment |
 | App | service principal with `EXECUTE` (and `MANAGE` for the live routing switch) on the concierge service |
 
-Operations analytics (Lakeflow pipeline, Genie, Vector Search, AI/BI dashboard) are not provisioned in the showcase. Show them from the reference workspace.
+Operations analytics are provisioned in the showcase too, by `scripts/provision-showcase.sh` (idempotent, about 10 minutes). It reads `CATALOG` and `SCHEMA` from `scripts/showcase.local.env` and creates, in that schema: the UC `products` and `customers` tables and the `streaming` volume; the bundle resources (Lakeflow pipeline, bounded event emitter job, refresh job, AI/BI dashboard) from a temporary bundle with its own target; 20,000 historical events and a first pipeline update; the `commerce_metrics` metric view; a Vector Search index on `products` (endpoint `VS_ENDPOINT`, default `shopibricks-ug`); and the merchant Genie space. It writes the IDs to `resources/showcase.provisioned.json` (git-ignored); wire them in `app.showcase.yaml` (`SHOPIBRICKS_VECTOR_INDEX`, `SHOPIBRICKS_GENIE_SPACE_ID`, `SHOPIBRICKS_PIPELINE_ID`, jobs as app resources). The console links then point to the showcase workspace. `SHOPIBRICKS_LINK_*` can still point them to another workspace.
 
 ## Talk track
 
@@ -39,6 +39,8 @@ Three small model services sit next to the concierge service, in the same schema
 When a service policy denies a chat turn, the gateway answers HTTP 200 with a top-level `databricks_service_policy` object (policy name, action, phase, reason). The lab harness (`app/server/ug_bench.py`) records it as a guardrail event, withholds the free-text product descriptions from that turn's tool results and retries once with the structured catalog data.
 
 A denied turn never reaches the model, so it is **not** written to the inference table: the table only holds the turns that were served. The app keeps the last decision returned by the gateway and shows it in the Guardrails card and at the top of the audit step.
+
+A second policy on `guarded_oss` masks PII (email addresses and credit card numbers) instead of denying: the model receives `[EMAIL_ADDRESS]` and `[CREDIT_CARD]`, and the masked request is what the inference table stores. The response carries no policy object, so the one-click test under the injection story asks the model to quote the contact and card it received, then reads the logged request by `x-request-id` (`GET /api/ug/received`).
 
 The outage drill in the routing card is a simulation: a real failover needs a primary that returns 429 or 5xx, and an unreachable custom provider returns 400, which does not trigger fallback.
 
