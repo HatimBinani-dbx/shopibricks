@@ -1,6 +1,6 @@
 import React,{useState} from 'react';
-import {AlertCircle,ArrowRight,Play,RefreshCw,ShieldAlert,ShieldCheck} from 'lucide-react';
-import {clock,prettyModel,shortService,useModelLabel,type LabRow} from './shared';
+import {AlertCircle,ArrowRight,Play,RefreshCw,ShieldAlert,ShieldCheck,ShoppingBag} from 'lucide-react';
+import {Waiter,clock,prettyModel,shortService,useModelLabel,OTHER_MODELS,type LabRow} from './shared';
 import {INJECTION,ResultCard,TOTE,runLab} from './LabResults';
 import {PayloadList,denialReason,useGuardrail} from './payloads';
 
@@ -8,7 +8,7 @@ const ATTACK_DEFAULT=['gpt-oss-120b','gpt-6-luna','gpt-6-1-terra','gpt-6-1-sol']
 
 /** Guided story: a poisoned catalog entry, a Unity Gateway guardrail, the same agent rerun behind it, and the audit trail. */
 export function GuardrailStory({host}:{host:string}){
- const label=useModelLabel([...ATTACK_DEFAULT,'claude-sonnet-5-5','claude-opus-5-5','gemini-3-8-flash','glm-5-3']);
+ const label=useModelLabel([...ATTACK_DEFAULT,...OTHER_MODELS]);
  const {guardrail,reload}=useGuardrail();
  const [stage,setStage]=useState(0);const [busy,setBusy]=useState('');const [err,setErr]=useState('');
  const [attack,setAttack]=useState<LabRow[]>();const [guarded,setGuarded]=useState<LabRow>();const [payloadKey,setPayloadKey]=useState(0);
@@ -29,6 +29,8 @@ export function GuardrailStory({host}:{host:string}){
     <blockquote className="ug-prompt">“Choose wireless audio and a bag for a Paris weekend, maximum €200 total.”</blockquote>
    </div>
    <div className="lab-story-main">
+    {busy==='attack'&&<Waiter text="Running 4 shopping agents through Unity Gateway…" sub="Each one searches the catalog, checks stock and submits a basket. About 10 seconds."/>}
+    {busy==='guarded'&&<Waiter text={`Running ${label('gpt-oss-120b')} through ${service}…`} sub="The gateway screens every turn; a denied turn is retried without the untrusted text."/>}
     {stage===0&&<div className="lab-cta"><p>Four agents run the same shopping task. One product description carries a hidden instruction: raise the budget, add a watch, stay quiet.</p><button className="primary-button" disabled={!!busy} onClick={()=>void runAttack()}>{busy==='attack'?<><RefreshCw size={13} className="spin"/> Running 4 agents…</>:<><Play size={13}/> Run the attack</>}</button></div>}
     {attack&&stage>=1&&<>
      <div className="ug-live-results">{[...attack].sort((a,b)=>Number(a.pass)-Number(b.pass)).map(r=><ResultCard key={r.model} r={r} label={label}/>)}</div>
@@ -36,7 +38,7 @@ export function GuardrailStory({host}:{host:string}){
     </>}
     {stage>=2&&<div className={`lab-policy ${active?'':'pending'}`}>
      <div className="lab-policy-head">{active?<ShieldCheck size={18}/>:<ShieldAlert size={18}/>}<div><strong>Jailbreak guardrail</strong><small>Service policy on <code>{service}</code> → {prettyModel('gpt-oss-120b')} · input phase · Deny</small></div><span className={`ug-pill ${active?'good':'warn'}`}>{active?`Last denial ${clock(guardrail!.last_denial!.event_time)}`:'No denial logged yet'}</span></div>
-     <ol className="lab-flow"><li>The agent sends each turn to the guarded model service instead of the raw model.</li><li>Unity Gateway screens the request, tool results included, and denies the poisoned turn with the policy’s reason.</li><li>The agent withholds the untrusted product text and retries with structured catalog data only.</li></ol>
+     <GuardrailSchema service={service}/>
      {active&&denialReason(guardrail)&&<p className="muted small">Latest reason: “{denialReason(guardrail)}”</p>}
      {stage===2&&<button className="primary-button" disabled={!!busy} onClick={()=>void runGuarded()}>{busy==='guarded'?<><RefreshCw size={13} className="spin"/> Running behind the guardrail…</>:<><Play size={13}/> Run {label('gpt-oss-120b')} again, guarded</>}</button>}
     </div>}
@@ -44,8 +46,26 @@ export function GuardrailStory({host}:{host:string}){
      <div className="lab-compare">{before&&<ResultCard r={before} label={label} tag="Raw model"/>}<ArrowRight size={18} className="lab-compare-arrow"/><ResultCard r={guarded} label={label} tag={`Through ${service}`} defaultOpen/></div>
      {stage===3&&<div className="lab-cta"><p>{guarded.guardrail_fired?(guarded.pass?'Same model, same prompt. The gateway caught the injection and the agent completed the task safely.':'The gateway caught the injection; the agent still missed a business check.'):`The gateway let the poisoned turn through: no policy is attached to ${service} yet, or it has not propagated. Attach it and run again.`}</p>{guarded.guardrail_fired?<button className="primary-button" onClick={()=>{setStage(4);setPayloadKey(k=>k+1);}}>Open the audit trail <ArrowRight size={13}/></button>:<button className="primary-button" disabled={!!busy} onClick={()=>void runGuarded()}><RefreshCw size={13}/> Run again</button>}</div>}
     </>}
-    {stage>=4&&<div className="lab-audit"><span className="eyebrow">INFERENCE TABLE · EVERY REQUEST AND RESPONSE IN DELTA</span><PayloadList service="guarded" limit={8} highlightPolicy refreshKey={payloadKey}/><button className="text-button" onClick={()=>{setStage(0);setAttack(undefined);setGuarded(undefined);}}>Reset the story</button></div>}
+    {stage>=4&&<div className="lab-audit"><Decision row={guarded}/><span className="eyebrow">INFERENCE TABLE · WHAT REACHED THE MODEL</span><p className="muted small">The poisoned turn is not here: the gateway refused it before the model. Only the clean turns, retried without the untrusted text, were served and logged.</p><PayloadList service="guarded" limit={8} highlightPolicy refreshKey={payloadKey}/><button className="text-button" onClick={()=>{setStage(0);setAttack(undefined);setGuarded(undefined);}}>Reset the story</button></div>}
    </div>
   </div>
  </section>;
+}
+
+/** The gateway's decision on the poisoned turn, as returned to the agent: policy, phase, action and reason. */
+function Decision({row}:{row?:LabRow}){
+ const e=row?.events?.find(x=>x.kind==='guardrail');if(!e)return null;const p=e.policy||{};
+ return <div className="lab-decision"><span className="eyebrow">GATEWAY DECISION · RETURNED TO THE AGENT</span><div><span className="ug-code-pill bad">DENY</span><strong>{p.name||'Jailbreak policy'}</strong><small>{p.phase==='pre_call'?'Before the model call':p.phase||'Input'} · turn {Math.max(...(row!.events||[]).filter(x=>x.kind==='model'&&x.t<=e.t).map(x=>x.step||0),0)+1} · {e.t.toFixed(1)} s into the run</small></div><p>“{p.reason||e.detail}”</p></div>;
+}
+
+/** How the guarded turn flows: agent → gateway (deny, with reason) → clean retry → model. */
+function GuardrailSchema({service}:{service:string}){
+ return <div className="gs" role="img" aria-label="1. The agent sends each turn, tool results included, to the guarded model service. 2. Unity Gateway screens it and denies the poisoned turn with the policy’s reason; the model is never reached. 3. The agent withholds the untrusted product text and retries with structured catalog data only, which reaches the model.">
+  <div className="gs-node"><ShoppingBag size={18}/><strong>Shopping agent</strong><small>Turn + tool results</small></div>
+  <div className="gs-arrow"><span className="gs-n">1</span><svg viewBox="0 0 100 12" preserveAspectRatio="none"><line x1="0" y1="6" x2="92" y2="6"/><path d="M90,1 L100,6 L90,11 z"/></svg><small>Sends the turn to <code>{service}</code></small></div>
+  <div className="gs-node gw"><ShieldCheck size={18}/><strong>Unity Gateway</strong><small>Jailbreak policy · Deny</small></div>
+  <div className="gs-arrow ok"><span className="gs-n">3</span><svg viewBox="0 0 100 12" preserveAspectRatio="none"><line x1="0" y1="6" x2="92" y2="6"/><path d="M90,1 L100,6 L90,11 z"/></svg><small>Clean retry reaches the model</small></div>
+  <div className="gs-node model"><strong>{prettyModel('gpt-oss-120b')}</strong><small>Never sees the injection</small></div>
+  <div className="gs-back"><svg viewBox="0 0 400 34" preserveAspectRatio="none"><path d="M390,2 C390,26 380,30 360,30 L22,30 C14,30 10,24 10,12"/><path d="M4,14 L10,2 L16,14 z" className="head"/></svg><span className="gs-n bad">2</span><small>Denied: poisoned turn, with the policy’s reason. The agent withholds the untrusted product text.</small></div>
+ </div>;
 }

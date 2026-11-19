@@ -2,7 +2,7 @@ import React,{useEffect,useMemo,useState} from 'react';
 import {AlertCircle,CheckCircle2,Copy,ExternalLink,RefreshCw,Terminal} from 'lucide-react';
 import {api} from '../api';
 import {OpenAIMark} from '../Brand';
-import {Empty,OPENAI,OTHER,THIRD,WindowPicker,clock,compact,failed,num,prettyModel,rows,secs,usd,usePresenter,isOpenAI,type Bench,type BenchModel,type Overview,type Row} from './shared';
+import {Empty,OPENAI,OTHER,THIRD,Waiter,WindowPicker,clock,compact,failed,num,prettyModel,rows,secs,usd,usePresenter,isOpenAI,type Bench,type BenchModel,type Overview,type Row} from './shared';
 
 type Codex={window:string;queried_at:string;sessions?:Row[]|{error:string};models?:Row[]|{error:string}};
 type Req={event_time:string;destination_model:string;status_code:string;latency_ms:string;input_tokens:string;cached_tokens:string;output_tokens:string;reasoning_tokens:string;cost_usd:number|null};
@@ -55,7 +55,7 @@ function SessionDetail({id,showCosts}:{id?:string;showCosts:boolean}){
  const h=hover!==undefined?reqs[hover]:undefined;
  if(!id)return <div className="codex-detail"><Empty text="Select a session."/></div>;
  return <div className="codex-detail">
-  {busy&&<Empty loading/>}
+  {busy&&<Waiter text="Loading this session’s requests…" sub="From system.ai_gateway.usage, request by request."/>}
   {!busy&&reqs.length>0&&<>
    <div className="codex-d-kpis"><div><span>Requests</span><b>{num(reqs.length)}</b></div><div><span>Duration</span><b>{duration(reqs[0].event_time,reqs[reqs.length-1].event_time)}</b></div><div><span>Context served from cache</span><b>{tot.inp?Math.round(tot.cached/tot.inp*100):0}%</b></div>{showCosts&&<div><span>Session cost</span><b>{usd(tot.cost)}</b></div>}</div>
    <div className="codex-chart" onMouseLeave={()=>setHover(undefined)}>

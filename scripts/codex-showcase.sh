@@ -24,4 +24,5 @@ supports_websockets = false
 TOML
 DATABRICKS_UG_TOKEN=$(databricks auth token --profile "$PROFILE" -o json | python3 -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
 export DATABRICKS_UG_TOKEN
-exec codex "$@"
+# Pass the model explicitly: Codex can otherwise keep the last model it used in this CODEX_HOME.
+exec codex -m "$MODEL" "$@"

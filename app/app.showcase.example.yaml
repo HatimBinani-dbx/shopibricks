@@ -24,3 +24,12 @@ env:
     value: https://<app-url>
   - name: SHOPIBRICKS_UG_USAGE_TABLE   # optional workspace-scoped view over system.ai_gateway.usage
     value: <catalog>.<schema>.gateway_usage
+  # Optional: console links to data assets in another workspace
+  - name: SHOPIBRICKS_LINK_DATA_HOST
+    value: https://<reference-workspace>
+  - name: SHOPIBRICKS_LINK_PIPELINE_ID
+    value: <pipeline-id>
+  - name: SHOPIBRICKS_LINK_STREAM_JOB_ID
+    value: "<job-id>"
+  - name: SHOPIBRICKS_LINK_GENIE_SPACE_ID
+    value: <genie-space-id>

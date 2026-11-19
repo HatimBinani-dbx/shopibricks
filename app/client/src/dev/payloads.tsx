@@ -1,7 +1,7 @@
 import React,{useEffect,useState} from 'react';
 import {ChevronDown,RefreshCw} from 'lucide-react';
 import {api} from '../api';
-import {Empty,clock,prettyModel,secs,summarizePayload,type Row} from './shared';
+import {Empty,Waiter,clock,prettyModel,secs,summarizePayload,type Row} from './shared';
 
 export type Guardrail={service:string|null;last_denial:{event_time:string;response:string}|null;queried_at?:string};
 /** Service policies have no public read API: status comes from the last denial logged in the guarded service's inference table. */
@@ -14,6 +14,7 @@ export function PayloadList({service,limit=6,highlightPolicy=false,refreshKey=0}
  useEffect(()=>{load();},[service,refreshKey]);
  return <div className="ug-payloads">
   <div className="ug-payload-head"><code>{data?.table?.split('.').pop()||'inference table'}</code><button className="icon-button" aria-label="Refresh inference table" onClick={load}><RefreshCw size={14} className={busy?'spin':''}/></button></div>
+  {busy&&!data&&<Waiter text="Reading the inference table…" sub="Latest requests and responses, from Delta."/>}
   {data&&!data.table&&<Empty text="No inference table on this service."/>}
   {data?.rows.length===0&&data.table&&<Empty text="No rows yet. Payloads usually land within a minute."/>}
   {data?.rows.map((r,i)=>{const s=summarizePayload(String(r.request||''),String(r.response||''));const denied=!!s.policy;return <div key={i} className={`ug-payload ${denied&&highlightPolicy?'denied':''} ${open===i?'open':''}`}>

@@ -10,7 +10,7 @@ A second deployment runs these views next to the reference app, in its own works
 |---|---|
 | Governed model service | `<catalog>.<schema>.concierge`: GPT-6 Luna primary, GPT-6.1 Sol fallback, 600 req/min service limit, 60 req/min and 200k tokens/min per user, inference table `concierge_payload` |
 | Usage | `<catalog>.<schema>.gateway_usage`, a view over `system.ai_gateway.usage` scoped to the workspace, owned by an admin (an app service principal usually cannot be granted system tables directly) |
-| SQL warehouse | dedicated serverless PRO, Medium, 1 to 3 clusters, 20 min auto-stop (same sizing as the fevm reference) |
+| SQL warehouse | dedicated serverless PRO, Medium, 1 to 3 clusters, 120 min auto-stop so it stays warm through the talk |
 | Lakebase | dedicated Autoscaling project, branch `production`, 1 CU, schema `shopibricks` owned by the app service principal (deploy before running locally) |
 | MLflow | dedicated experiment |
 | App | service principal with `EXECUTE` (and `MANAGE` for the live routing switch) on the concierge service |
@@ -21,7 +21,9 @@ Operations analytics (Lakeflow pipeline, Genie, Vector Search, AI/BI dashboard) 
 
 The timed script, with one takeaway per panel and the closing ice breaker, is in [PITCH_DEVELOPER_ACT.md](PITCH_DEVELOPER_ACT.md).
 
-Panels: **Architecture** (`#architecture`), **Unity Gateway** (`#gateway`), **Model lab** (`#lab`), **Codex** (`#codex`). Presenter settings (anonymize non-OpenAI models, costs, animations) open from the gear next to the tabs, or with Shift + comma.
+Panels: **Architecture** (`#architecture`), **Unity Gateway** (`#gateway`), **Model lab** (`#lab`), **Codex** (`#codex`). Presenter settings (anonymize non-OpenAI models, costs, animations, fallback mode) open from the gear next to the tabs, or with Shift + comma.
+
+**Fallback mode** (off by default) serves recorded responses across the Developer studio (Unity Gateway, Model lab, Codex) with realistic delays and no network call, for the case where the workspace is unreachable on stage. Nothing on screen shows it. The recordings live in `app/client/src/dev/fixtures.json` (identifiers replaced by `demo_catalog`), including one real run per Model lab scenario and model and a real guarded injection run.
 
 ## Demo services
 
@@ -30,10 +32,15 @@ Three small model services sit next to the concierge service, in the same schema
 | Service | Purpose | Setup |
 |---|---|---|
 | `finance_reserved` | Identity demo: the app service principal has no `EXECUTE` grant, so the call is denied | GPT-6 Astra destination, no grant to the app |
+| `routing_split` | Routing demo: weighted primary destinations and a fallback, edited live from the Routing & fallback card. The served destination of each request is read from its inference table | GPT-6 Luna and GPT-6.1 Terra primaries, GPT-6.1 Sol fallback; app has `EXECUTE` and `MANAGE` |
 | `ratelimit_1rpm` | Rate-limit demo: 1 request per minute for the service and per user. The button sends spikes of 5 back-to-back requests | GPT-6 Luna destination, app has `EXECUTE` |
 | `guarded_oss` | Guardrail story: gpt-oss-120b behind a Jailbreak service policy, with an inference table | Attach the policy once in the UI (Unity Gateway › Models › guarded_oss › Policies › Jailbreak, input, Deny). There is no public API for service policies |
 
-When a service policy denies a chat turn, the gateway answers HTTP 200 with a top-level `databricks_service_policy` object. The lab harness (`app/server/ug_bench.py`) records it as a guardrail event, withholds the free-text product descriptions from that turn's tool results and retries once with the structured catalog data.
+When a service policy denies a chat turn, the gateway answers HTTP 200 with a top-level `databricks_service_policy` object (policy name, action, phase, reason). The lab harness (`app/server/ug_bench.py`) records it as a guardrail event, withholds the free-text product descriptions from that turn's tool results and retries once with the structured catalog data.
+
+A denied turn never reaches the model, so it is **not** written to the inference table: the table only holds the turns that were served. The app keeps the last decision returned by the gateway and shows it in the Guardrails card and at the top of the audit step.
+
+The outage drill in the routing card is a simulation: a real failover needs a primary that returns 429 or 5xx, and an unreachable custom provider returns 400, which does not trigger fallback.
 
 The rate-limit demo sends requests one by one: parallel bursts can pass before the distributed counter updates. Enforcement is approximate across gateway replicas, so a spike of 5 against a 1-per-minute limit typically serves 0 to 3 requests in a variable order, and the limit can take a few spikes to kick in after a quiet period.
 
@@ -85,8 +92,15 @@ No published source measures execution time. Do not claim "faster" from these be
 
 ## Before the talk
 
-- Run the concierge and one Model lab comparison 15 to 30 minutes before, so `gateway_usage` already shows traffic (ingestion is delayed).
-- Start one Codex session with `scripts/codex-showcase.sh` beforehand for the same reason.
-- Confirm the concierge's primary route is back on GPT-6 Luna after rehearsal.
+Run `scripts/warmup-showcase.sh` 15 minutes before going on stage (about 4 minutes; `--quick` skips the model runs). It reads `PROFILE` and `APP` from `scripts/showcase.local.env`, then:
+
+1. starts the app and the SQL warehouse, and keeps the warehouse auto-stop at 120 minutes;
+2. puts the concierge back on GPT-6 Luna with GPT-6.1 Sol as fallback (`CONCIERGE_PRIMARY` to override), and the routing demo on Luna 50 %, Terra 50 %, Sol fallback;
+3. sends one real request through every demo: a concierge run, 12 routing requests (traced from the inference table), identity (expects 200 and 403), the rate-limit service, a Model lab comparison, the injection attack and the guarded rerun (expects a denial and a pass);
+4. reads every SQL-backed panel once (usage, Codex, inference tables, guardrail) so the warehouse and server caches are hot;
+5. prints a checklist and exits non-zero if any check fails.
+
+The first cold run of a model can take much longer than on stage (up to 2 minutes for the attack); that is what the warm-up absorbs. Usage system tables ingest with a delay (up to about 80 minutes on the showcase), which is why the Codex sessions come from earlier work on the repository: start one with `scripts/codex-showcase.sh` (pass `-m <model>` explicitly) well before the talk.
+
 - Smart Routing is supported for the Claude Code harness only, not Codex: do not present it as a Codex feature.
-- Guardrails (service policies, Beta) are described but not configured on the concierge service.
+- Guardrails (service policies, Beta) are attached to `guarded_oss` only, not to the concierge service.

@@ -1,5 +1,7 @@
 import React,{createContext,useContext,useEffect,useMemo,useState} from 'react';
 import {Settings2,X} from 'lucide-react';
+import {setInterceptor} from '../api';
+import {simulate} from './simulate';
 
 export type Row=Record<string,unknown>;
 export type Destination={name:string;traffic_percentage?:number;pay_per_token_config?:{model?:string}};
@@ -7,7 +9,7 @@ export type Overview={service:string;identity?:string;workspace_id?:string;demos
 export type Usage={window:string;queried_at:string;service:string;services?:Row[]|{error:string};attribution?:Row[]|{error:string};concierge?:Row[]|{error:string}};
 export type BenchModel={model:string;provider:string;runs:number;passed:number;success_rate:number;median_latency_s:number|null;p90_latency_s:number|null;avg_cost_usd:number;cost_per_success_usd:number|null;avg_tokens:number;errors:number;by_scenario:Record<string,number>};
 export type Bench={generated_at:string;repeats:number;openai_reasoning_effort:string;scenarios:{id:string;title:string;prompt:string}[];pricing_note:string;models:BenchModel[]};
-export type LabEvent={t:number;kind:'model'|'tool'|'guardrail'|'retry'|'error'|'grade';name?:string;detail?:string;step?:number;tokens?:number|null;ok?:boolean};
+export type LabEvent={t:number;kind:'model'|'tool'|'guardrail'|'retry'|'error'|'grade';name?:string;detail?:string;step?:number;tokens?:number|null;ok?:boolean;policy?:{name?:string;action?:string;phase?:string;reason?:string}};
 export type LabRow={model:string;provider:string;scenario:string;pass:boolean;reasons:string[];latency_s:number;tool_calls:number;usage:{input:number;output:number;cached?:number};cost_usd:number;answer?:{items?:{id:string;quantity:number}[];total_cents?:number;note?:string;feasible?:boolean}|null;error?:string|null;service?:string;events?:LabEvent[];guardrail_fired?:boolean};
 
 // Validated categorical colors (dataviz validate_palette.js, light surface).
@@ -29,18 +31,24 @@ export const shortService=(s?:string)=>String(s||'').split('.').pop()||'';
 export const workspaceUrl=(host:string,pathname:string)=>host?`${host}${pathname}`:'';
 
 // ---------------------------------------------------------------- presenter settings
-type Settings={anonymize:boolean;motion:boolean;showCosts:boolean};
-const DEFAULTS:Settings={anonymize:true,motion:true,showCosts:true};
+type Settings={anonymize:boolean;motion:boolean;showCosts:boolean;fallback:boolean};
+const DEFAULTS:Settings={anonymize:true,motion:true,showCosts:true,fallback:false};
 const KEY='shopibricks.presenter';
 const Ctx=createContext<{settings:Settings;set:(patch:Partial<Settings>)=>void}>({settings:DEFAULTS,set:()=>undefined});
 export function PresenterProvider({children}:{children:React.ReactNode}){
  const [settings,setSettings]=useState<Settings>(()=>{try{return{...DEFAULTS,...JSON.parse(localStorage.getItem(KEY)||'{}')};}catch{return DEFAULTS;}});
  useEffect(()=>{localStorage.setItem(KEY,JSON.stringify(settings));},[settings]);
+ useEffect(()=>{setInterceptor(settings.fallback?simulate:null);},[settings.fallback]);
  const value=useMemo(()=>({settings,set:(patch:Partial<Settings>)=>setSettings(s=>({...s,...patch}))}),[settings]);
  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 export const usePresenter=()=>useContext(Ctx);
 export const useReducedMotion=()=>{const {settings}=usePresenter();const [prefers]=useState(()=>typeof matchMedia!=='undefined'&&matchMedia('(prefers-reduced-motion: reduce)').matches);return prefers||!settings.motion;};
+
+/** Every non-OpenAI model the studio can show: one list, so "Model A, B…" letters match on every page. */
+export const OTHER_MODELS=['claude-sonnet-5-5','claude-opus-5-5','gemini-3-8-flash','glm-5-3'];
+/** A service name for display: system.ai services are labelled like their model (anonymized when needed). */
+export const serviceLabel=(s:string,label:(m:string)=>string)=>{const v=String(s||'');return v.startsWith('system.ai.')?label(v):shortService(v);};
 
 /** Display name for a model: non-OpenAI models become "Model A, B…" when anonymized (stable alphabetical order). */
 export function useModelLabel(models:string[]){
@@ -56,7 +64,7 @@ export function PresenterSettingsButton(){
   <button className="dev-gear" aria-label="Presenter settings" title="Presenter settings" onClick={()=>setOpen(true)}><Settings2 size={15}/></button>
   {open&&<div className="dev-drawer-backdrop" onClick={()=>setOpen(false)}><aside className="dev-drawer" role="dialog" aria-label="Presenter settings" onClick={e=>e.stopPropagation()}>
    <div className="dev-drawer-head"><div><span className="eyebrow">PRESENTER</span><h3>Settings</h3></div><button className="icon-button" aria-label="Close settings" onClick={()=>setOpen(false)}><X size={16}/></button></div>
-   {([['anonymize','Anonymize non-OpenAI models','Shows "Model A, B…" instead of other providers’ names in the model lab.'],['showCosts','Show costs','Estimated spend at public list price on every page.'],['motion','Animations','Flowing diagrams and transitions. Off respects a calmer projector.']] as const).map(([k,t,d])=><label key={k} className="dev-switch"><input type="checkbox" checked={settings[k]} onChange={e=>set({[k]:e.target.checked})}/><span className="dev-switch-ui" aria-hidden/><span><strong>{t}</strong><small>{d}</small></span></label>)}
+   {([['anonymize','Anonymize non-OpenAI models','Shows "Model A, B…" instead of other providers’ names in the model lab.'],['showCosts','Show costs','Estimated spend at public list price on every page.'],['motion','Animations','Flowing diagrams and transitions. Off respects a calmer projector.'],['fallback','Fallback mode','Serves recorded responses across the Developer studio (Unity Gateway, Model lab, Codex) if the workspace is unreachable. Keep off: live is the default.']] as const).map(([k,t,d])=><label key={k} className="dev-switch"><input type="checkbox" checked={settings[k]} onChange={e=>set({[k]:e.target.checked})}/><span className="dev-switch-ui" aria-hidden/><span><strong>{t}</strong><small>{d}</small></span></label>)}
    <p className="muted dev-drawer-foot">Stored in this browser only. Shortcut: Shift + ,</p>
   </aside></div>}
  </>;
@@ -75,4 +83,9 @@ export function summarizePayload(request:string,response:string){
  // Tool results arrive as JSON strings (sometimes wrapped in {"text": ...}): decode them for a readable preview.
  const tidy=(v:string)=>{let x:unknown=v;for(let i=0;i<3&&typeof x==='string';i++){try{x=JSON.parse(x);}catch{break;}if(x&&typeof x==='object'&&'text' in (x as Row))x=(x as Row).text;}return typeof x==='string'?x:JSON.stringify(x,null,1);};
  return{input:tidy(input).slice(0,600),output:String(output).slice(0,400),policy,tools,agent};
+}
+
+/** Shown while a live call runs: says what is happening, in a few words. */
+export function Waiter({text,sub}:{text:string;sub?:string}){
+ return <div className="ug-waiter" role="status" aria-live="polite"><span className="ug-waiter-spin" aria-hidden="true"/><div><strong>{text}</strong>{sub&&<small>{sub}</small>}<span className="ug-waiter-bar" aria-hidden="true"><i/></span></div></div>;
 }

@@ -21,6 +21,7 @@ export const demos=()=>({
  restricted:demoService('SHOPIBRICKS_UG_RESTRICTED_SERVICE','finance_reserved'),
  ratelimit:demoService('SHOPIBRICKS_UG_RATELIMIT_SERVICE','ratelimit_1rpm'),
  guarded:demoService('SHOPIBRICKS_UG_GUARDED_SERVICE','guarded_oss'),
+ split:demoService('SHOPIBRICKS_UG_SPLIT_SERVICE','routing_split'),
 });
 const SERVICE_NAME=/^[\w-]+\.[\w-]+\.[\w-]+$/;
 
@@ -122,12 +123,26 @@ async function servedBy(service:string,requestId:unknown){
 // The principal the app calls with: the app's service principal when deployed, or the one configured for local runs.
 const appPrincipal=()=>process.env.DATABRICKS_CLIENT_ID||process.env.SHOPIBRICKS_APP_SP_ID||'';
 /** Service policies have no public read API; the evidence is a denial logged in the guarded service's inference table. */
+// A denied turn never reaches the model, so the inference table has no row for it: keep the last decision the gateway returned.
+let seenDenial:Row|null=null;
+function noteDenial(policy:unknown){if(policy&&typeof policy==='object')seenDenial={event_time:new Date().toISOString(),response:JSON.stringify({databricks_service_policy:policy}),source:'gateway_response'};}
 async function lastDenial(service:string){
  const cfg=await serviceConfig(service) as {config?:{inference_table?:{table?:string}}};
  const table=cfg.config?.inference_table?.table?.replace(/^tables\//,'');if(!table||!/^[\w-]+\.[\w-]+\.[\w-]+$/.test(table))return null;
  const rows=await sql(`SELECT event_time, substr(response,1,2000) AS response FROM ${table} WHERE response LIKE '%databricks_service_policy%' ORDER BY event_time DESC LIMIT 1`);
  return rows[0]||null;
 }
+
+type Policy={destinations:{model:string;pct:number}[];fallback:string[]};
+/** One lookup of served destinations, without waiting: the client polls. */
+async function servedOnce(service:string,ids:string[]){
+ const clean=ids.filter(i=>/^[0-9a-f-]{36}$/i.test(i));if(!clean.length)return{};
+ const cfg=await serviceConfig(service) as {config?:{inference_table?:{table?:string}}};
+ const table=cfg.config?.inference_table?.table?.replace(/^tables\//,'');if(!table||!/^[\w-]+\.[\w-]+\.[\w-]+$/.test(table))return{};
+ const rows=await sql(`SELECT request_id, destination_name FROM ${table} WHERE request_id IN (${clean.map(x=>`'${x}'`).join(',')})`);
+ return Object.fromEntries(rows.map(r=>[String(r.request_id),String(r.destination_name)]));
+}
+const splitPolicy=async(force=false):Promise<Policy>=>{if(force)cache.delete(`svc:${demos().split}`);const cfg=await serviceConfig(demos().split) as {config?:{routing?:{destinations?:{name:string;traffic_percentage?:number}[];fallback?:{destinations?:{name:string}[]}}}};const r=cfg.config?.routing;return{destinations:(r?.destinations||[]).map(d=>({model:d.name,pct:Number(d.traffic_percentage||0)})),fallback:(r?.fallback?.destinations||[]).map(d=>d.name)};};
 
 function benchSummary(){
  for(const file of [path.resolve('server/bench-latest.json'),path.resolve('../bench/results/latest.json')])if(existsSync(file))return JSON.parse(readFileSync(file,'utf8'));
@@ -157,10 +172,11 @@ export function registerUnityGateway(app:Express,wrap:Wrap){
  app.get('/api/ug/guardrail',wrap(async(_req,res)=>{
   const service=demos().guarded;if(!SERVICE_NAME.test(service))return res.json({service:null,last_denial:null});
   let denial:Row|null=null;try{denial=await lastDenial(service);}catch{denial=null;}
+  if(seenDenial&&(!denial||String(seenDenial.event_time)>String(denial.event_time)))denial=seenDenial;
   res.json({service,last_denial:denial,queried_at:new Date().toISOString()});
  }));
  app.post('/api/ug/try',wrap(async(req,res)=>{
-  const input=z.object({demo:z.enum(['identity','probe','burst','limit','guardrail']),variant:z.enum(['attack','normal']).optional()}).parse(req.body);
+  const input=z.object({demo:z.enum(['identity','probe','burst','spike','limit','guardrail']),variant:z.enum(['attack','normal']).optional()}).parse(req.body);
   const d=demos();
   if(input.demo==='identity'){
    const targets=[{label:'Granted',service:modelService()},{label:'Not granted',service:d.restricted}].filter(t=>SERVICE_NAME.test(t.service)||t.service.startsWith('system.ai.'));
@@ -176,6 +192,12 @@ export function registerUnityGateway(app:Express,wrap:Wrap){
    const cfg=await serviceConfig(d.ratelimit) as {config?:{rate_limits?:unknown}};
    return res.json({demo:input.demo,service:d.ratelimit,limits:cfg.config?.rate_limits,...(await gateway({action:'ug_probe',service:d.ratelimit,prompt:'Reply with OK.'}) as Row)});
   }
+  if(input.demo==='spike'){
+   // Push the service over its limit; the result of each call is not the point.
+   if(!SERVICE_NAME.test(d.ratelimit))return res.status(404).json({error:{code:'not_configured',message:'No rate-limit demo service is configured.'}});
+   const started=Date.now();const out=await gateway({action:'ug_split_send',service:d.ratelimit,n:8}) as {rows:Row[]};
+   return res.json({demo:input.demo,service:d.ratelimit,sent:out.rows.length,seconds:(Date.now()-started)/1000});
+  }
   if(input.demo==='burst'){
    if(!SERVICE_NAME.test(d.ratelimit))return res.status(404).json({error:{code:'not_configured',message:'No rate-limit demo service is configured.'}});
    if(burstBusy)return res.status(409).json({error:{code:'busy',message:'A burst is already running.'}});
@@ -183,9 +205,29 @@ export function registerUnityGateway(app:Express,wrap:Wrap){
   }
   if(!SERVICE_NAME.test(d.guarded))return res.status(404).json({error:{code:'not_configured',message:'No guarded demo service is configured.'}});
   const variant=input.variant||'attack';
-  res.json({demo:input.demo,service:d.guarded,variant,prompt:GUARDRAIL_PROMPTS[variant],...(await gateway({action:'ug_probe',service:d.guarded,prompt:GUARDRAIL_PROMPTS[variant]}) as Row)});
+  const probed=await gateway({action:'ug_probe',service:d.guarded,prompt:GUARDRAIL_PROMPTS[variant]}) as Row;noteDenial(probed.policy);
+  res.json({demo:input.demo,service:d.guarded,variant,prompt:GUARDRAIL_PROMPTS[variant],...probed});
  }));
  app.get('/api/ug/served',wrap(async(req,res)=>res.json(await servedBy(modelService(),z.string().uuid().parse(req.query.request_id))||{pending:true})));
+ app.get('/api/ug/split',wrap(async(_req,res)=>{if(!SERVICE_NAME.test(demos().split))return res.json({service:null,destinations:[],fallback:[]});res.json({service:demos().split,models:ROUTABLE,...(await splitPolicy())});}));
+ app.post('/api/ug/split',wrap(async(req,res)=>{
+  const input=z.object({weights:z.array(z.object({model:z.enum(ROUTABLE),pct:z.number().int().min(1).max(100)})).min(1).max(3),fallback:z.array(z.enum(ROUTABLE)).max(2).default([])}).parse(req.body);
+  if(input.fallback.some(f=>input.weights.some(w=>w.model===f)))return res.status(422).json({error:{code:'invalid_policy',message:'A fallback model cannot also be a primary destination.'}});
+  if(input.weights.reduce((t,w)=>t+w.pct,0)!==100)return res.status(422).json({error:{code:'invalid_split',message:'Percentages must add up to 100.'}});
+  if(new Set(input.weights.map(w=>w.model)).size!==input.weights.length)return res.status(422).json({error:{code:'invalid_split',message:'Each model can appear once.'}});
+  await gateway({action:'ug_split_set',service:demos().split,weights:input.weights,fallback:input.fallback});
+  res.json({service:demos().split,...(await splitPolicy(true)),changed_at:new Date().toISOString()});
+ }));
+ app.post('/api/ug/split/send',wrap(async(_req,res)=>{
+  if(!SERVICE_NAME.test(demos().split))return res.status(404).json({error:{code:'not_configured',message:'No traffic-split demo service is configured.'}});
+  // Answer as soon as the requests return; the client then traces destinations progressively.
+  const sent=await gateway({action:'ug_split_send',service:demos().split,n:12}) as {rows:Row[]};
+  res.json({service:demos().split,...(await splitPolicy()),rows:sent.rows.map(r=>({status:r.status,latency_ms:r.latency_ms,request_id:r.request_id||null,destination:null}))});
+ }));
+ app.get('/api/ug/split/served',wrap(async(req,res)=>{
+  const ids=z.string().max(1200).parse(req.query.ids||'').split(',').filter(Boolean).slice(0,30);
+  res.json({served:await servedOnce(demos().split,ids)});
+ }));
  app.get('/api/ug/bench',(_req,res)=>{const summary=benchSummary();if(!summary)return res.status(404).json({error:{code:'not_found',message:'No benchmark results are bundled with this build.'}});res.json(summary);});
  app.post('/api/ug/lab',wrap(async(req,res)=>{
   const input=z.object({scenario:z.enum(LAB_SCENARIOS),runs:z.array(z.object({model:z.enum(LAB_MODELS),guarded:z.boolean().default(false)})).min(1).max(4)}).parse(req.body);
@@ -194,7 +236,7 @@ export function registerUnityGateway(app:Express,wrap:Wrap){
   // The guarded service routes to gpt-oss-120b; other models always run on their system.ai service.
   const runs=input.runs.map(r=>({model:r.model,service:r.guarded&&r.model==='gpt-oss-120b'?guarded:undefined}));
   if(labBusy)return res.status(409).json({error:{code:'busy',message:'A comparison is already running.'}});
-  labBusy=true;try{res.json({...(await gateway({action:'ug_lab',scenario:input.scenario,runs})),ran_at:new Date().toISOString(),via:'Unity Gateway'});}finally{labBusy=false;}
+  labBusy=true;try{const out=await gateway({action:'ug_lab',scenario:input.scenario,runs}) as {rows?:{events?:{kind:string;policy?:unknown;detail?:string}[]}[]};for(const r of out.rows||[])for(const e of r.events||[])if(e.kind==='guardrail')noteDenial(e.policy||{reason:e.detail});res.json({...out,ran_at:new Date().toISOString(),via:'Unity Gateway'});}finally{labBusy=false;}
  }));
  app.post('/api/ug/route',wrap(async(req,res)=>{
   if(process.env.SHOPIBRICKS_UG_ALLOW_ROUTING!=='1'||modelService().startsWith('system.ai.'))return res.status(403).json({error:{code:'routing_disabled',message:'Live routing changes are disabled for this deployment.'}});

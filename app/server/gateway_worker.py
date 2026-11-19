@@ -149,6 +149,27 @@ def main(request):
             emit({"type": "completed", "response": {"privileges": privileges}})
         except Exception as exc:
             emit({"type": "completed", "response": {"privileges": None, "error": str(exc)[:300]}})
+    elif action == "ug_split_set":
+        w = WorkspaceClient()
+        destinations = [{"name": d["model"], "destination_type": "DESTINATION_TYPE_PAY_PER_TOKEN_FOUNDATION_MODEL",
+                         "pay_per_token_config": {"model": f"models/system.ai.databricks-{d['model']}"}, "traffic_percentage": int(d["pct"])}
+                        for d in request["weights"]]
+        routing = {"destinations": destinations}
+        mask = "config.routing.destinations"
+        if request.get("fallback"):
+            routing["fallback"] = {"destinations": [{"name": m, "destination_type": "DESTINATION_TYPE_PAY_PER_TOKEN_FOUNDATION_MODEL",
+                                                      "pay_per_token_config": {"model": f"models/system.ai.databricks-{m}"}} for m in request["fallback"]]}
+            mask += ",config.routing.fallback.destinations"
+        result = w.api_client.do("PATCH", f"/api/2.1/unity-catalog/model-services/{request['service']}",
+                                 query={"update_mask": mask}, body={"config": {"routing": routing}})
+        emit({"type": "completed", "response": result})
+    elif action == "ug_split_send":
+        from concurrent.futures import ThreadPoolExecutor
+        n = max(1, min(int(request.get("n", 20)), 30))
+        # Reasoning models need room to answer: a tiny max_tokens fails on GPT-6.1 Sol.
+        with ThreadPoolExecutor(min(n, 12)) as pool:
+            rows = list(pool.map(lambda i: {"i": i, **probe(request["service"], "Reply with OK.", 300)}, range(n)))
+        emit({"type": "completed", "response": {"rows": rows}})
     elif action == "ug_policies":
         w = WorkspaceClient()
         try:

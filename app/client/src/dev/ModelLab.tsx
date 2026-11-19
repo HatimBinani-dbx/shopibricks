@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {AlertCircle,ExternalLink,Sparkles} from 'lucide-react';
 import {api} from '../api';
-import {OPENAI,OTHER,isOpenAI,num,providerOf,usd,useModelLabel,usePresenter,type Bench,type BenchModel,type LabRow} from './shared';
+import {OPENAI,OTHER,Waiter,isOpenAI,num,providerOf,usd,useModelLabel,usePresenter,OTHER_MODELS,type Bench,type BenchModel,type LabRow} from './shared';
 import {ResultCard,runLab} from './LabResults';
 
 /** Models on the cost/quality frontier: each is strictly better than every cheaper model. */
@@ -10,7 +10,7 @@ function frontier(models:BenchModel[]){const pts=models.filter(m=>m.cost_per_suc
 export function ModelLab(){
  const [bench,setBench]=useState<Bench>();const [error,setError]=useState('');
  useEffect(()=>{api<Bench>('/api/ug/bench').then(setBench).catch(e=>setError(e.message));},[]);
- const label=useModelLabel((bench?.models||[]).map(m=>m.model).concat(['gpt-oss-120b','claude-sonnet-5-5','claude-opus-5-5','gemini-3-8-flash','glm-5-3']));
+ const label=useModelLabel((bench?.models||[]).map(m=>m.model).concat(['gpt-oss-120b',...OTHER_MODELS]));
  const {settings}=usePresenter();
  const pitch=useMemo(()=>{if(!bench)return undefined;const ms=bench.models;const f=frontier(ms);
   const perfect=ms.filter(m=>m.success_rate===1&&m.cost_per_success_usd!=null).sort((a,b)=>a.cost_per_success_usd!-b.cost_per_success_usd!);
@@ -72,6 +72,7 @@ function FreeRun({scenarios,models,label}:{scenarios:Bench['scenarios'];models:B
    <div><span className="eyebrow">MODELS · UP TO 4</span><div className="ug-chip-picker">{models.map(m=><button key={m.model} aria-pressed={picked.includes(m.model)} className={picked.includes(m.model)?'active':''} onClick={()=>setPicked(p=>p.includes(m.model)?p.filter(x=>x!==m.model):p.length<4?[...p,m.model]:p)}><i className={`ug-dot ${isOpenAI(m.provider)?'':'diamond'}`} style={{background:isOpenAI(m.provider)?OPENAI:OTHER}}/>{label(m.model)}</button>)}</div></div>
    <button className="primary-button" disabled={running||!picked.length} onClick={()=>void run()}>{running?'Running…':'Run'}</button></div>
   {s&&<blockquote className="ug-prompt">“{s.prompt}”</blockquote>}
+  {running&&<Waiter text={`Running ${picked.length} agent${picked.length>1?'s':''} through Unity Gateway…`} sub="Search, stock check, basket and exact total, graded by code."/>}
   {error&&<div className="ug-alert"><AlertCircle size={15}/>{error}</div>}
   {result&&<div className="ug-live-results">{[...result].sort((a,b)=>Number(b.pass)-Number(a.pass)||a.cost_usd-b.cost_usd).map(r=><ResultCard key={r.model} r={r} label={label}/>)}</div>}
   <div className="source-note">Every call is logged in system.ai_gateway.usage · providers: {[...new Set(picked.map(providerOf))].join(', ')}<a className="lab-src" href="https://docs.databricks.com/aws/en/ai-gateway/" target="_blank" rel="noreferrer">Unity Gateway docs <ExternalLink size={11}/></a></div>
