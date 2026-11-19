@@ -118,10 +118,44 @@ def main(request):
         import ug_bench
         from concurrent.futures import ThreadPoolExecutor
         scenario = ug_bench.scenario(request["scenario"])
-        models = [m for m in request["models"] if m in ug_bench.PRICES_DBU][:4]
-        with ThreadPoolExecutor(max(len(models), 1)) as pool:
-            rows = list(pool.map(lambda m: ug_bench.run_once(m, scenario, None, request.get("effort", "low")), models))
+        runs = [r for r in request["runs"] if r.get("model") in ug_bench.PRICES_DBU][:4]
+        with ThreadPoolExecutor(max(len(runs), 1)) as pool:
+            rows = list(pool.map(lambda r: ug_bench.run_once(r["model"], scenario, None, request.get("effort", "low"), service=r.get("service")), runs))
         emit({"type": "completed", "response": {"scenario": {"id": scenario.id, "title": scenario.title, "prompt": scenario.prompt}, "rows": rows}})
+    elif action == "ug_probe":
+        emit({"type": "completed", "response": probe(request["service"], request.get("prompt") or "Reply with one short sentence: which model are you?")})
+    elif action == "ug_burst":
+        import time
+        n = max(1, min(int(request.get("n", 6)), 10))
+        # Back-to-back calls, like a runaway agent loop. Parallel bursts can slip past the
+        # distributed counter before it updates, which would understate the limit.
+        rows = []
+        for i in range(n):
+            rows.append({"i": i, **probe(request["service"], "Reply with OK.", 16)})
+            time.sleep(0.2)
+        emit({"type": "completed", "response": {"rows": rows}})
+    elif action == "ug_service":
+        w = WorkspaceClient()
+        try:
+            result = w.api_client.do("GET", f"/api/2.1/unity-catalog/model-services/{request['service']}")
+        except Exception as exc:
+            result = {"error": str(exc)[:300]}
+        emit({"type": "completed", "response": result})
+    elif action == "ug_effective":
+        w = WorkspaceClient()
+        try:
+            result = w.api_client.do("GET", f"/api/2.1/unity-catalog/effective-permissions/model_service/{request['service']}", query={"principal": request["principal"]})
+            privileges = sorted({p["privilege"] for a in result.get("privilege_assignments", []) for p in a.get("privileges", [])})
+            emit({"type": "completed", "response": {"privileges": privileges}})
+        except Exception as exc:
+            emit({"type": "completed", "response": {"privileges": None, "error": str(exc)[:300]}})
+    elif action == "ug_policies":
+        w = WorkspaceClient()
+        try:
+            result = w.api_client.do("GET", f"/api/2.1/unity-catalog/policies/MODEL_SERVICE/{request['service']}")
+        except Exception as exc:
+            result = {"error": str(exc)[:300]}
+        emit({"type": "completed", "response": result})
     elif action == "ug_route":
         w = WorkspaceClient()
         service = request["service"]
@@ -133,6 +167,33 @@ def main(request):
         emit({"type": "completed", "response": result})
     else:
         raise ValueError("Unknown gateway operation")
+
+
+_probe_client = None
+
+
+def probe(service, prompt, max_tokens=120):
+    """One small Chat Completions call through a Unity Gateway model service, reported without raising."""
+    global _probe_client
+    import time
+    from databricks_openai import DatabricksOpenAI
+    if _probe_client is None:
+        _probe_client = DatabricksOpenAI(use_ai_gateway_native_api=True, timeout=60, max_retries=0)
+    started = time.monotonic()
+    try:
+        raw = _probe_client.chat.completions.with_raw_response.create(model=service, messages=[{"role": "user", "content": prompt}], max_tokens=max_tokens)
+        r = raw.parse()
+        policy = (getattr(r, "model_extra", None) or {}).get("databricks_service_policy")
+        # The gateway does not say which destination served the call; the request id links it to the inference table.
+        return {"status": 200, "latency_ms": round((time.monotonic() - started) * 1000), "model": r.model, "request_id": raw.headers.get("x-request-id"),
+                "text": (r.choices[0].message.content or "")[:400], "policy": policy,
+                "tokens": (r.usage.total_tokens if r.usage else None)}
+    except Exception as exc:
+        status = getattr(exc, "status_code", None)
+        body = getattr(exc, "body", None)
+        message = (body.get("message") if isinstance(body, dict) else None) or str(exc)
+        code = body.get("error_code") if isinstance(body, dict) else None
+        return {"status": status or 500, "latency_ms": round((time.monotonic() - started) * 1000), "error_code": code, "error": str(message)[:400]}
 
 
 def unity_gateway_overview(service):

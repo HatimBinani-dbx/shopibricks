@@ -222,15 +222,57 @@ def call_with_retry(fn, attempts=4):
             time.sleep(2 ** k + random.random())
 
 
-def run_once(model, s: Scenario, profile, effort, max_steps=8):
+def _policy(resp):
+    """Unity Gateway service policies deny chat turns with HTTP 200 and a top-level databricks_service_policy object."""
+    extra = getattr(resp, "model_extra", None) or {}
+    return extra.get("databricks_service_policy")
+
+
+def _brief(name, args):
+    if name == "search_products":
+        return f"query={args.get('query')!r} max={args.get('max_price_cents') or '-'}"
+    if name == "get_inventory":
+        return ", ".join(args.get("product_ids") or [])
+    if name == "submit_answer":
+        items = ", ".join(f"{i.get('quantity', 1)}x {i.get('id')}" for i in args.get("items") or [])
+        return f"{items or 'no items'} | total {args.get('total_cents')} | feasible={args.get('feasible')}"
+    return json.dumps(args)[:120]
+
+
+def _withhold_untrusted(messages):
+    """After a guardrail denial, drop free-text catalog fields from the tool results of this turn and keep structured data."""
+    changed = 0
+    for m in reversed(messages):
+        if m.get("role") != "tool":
+            break
+        try:
+            data = json.loads(m["content"])
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if isinstance(data, list):
+            for row in data:
+                if isinstance(row, dict) and "description" in row:
+                    row["description"] = "[withheld: flagged by Unity Gateway guardrail]"
+                    changed += 1
+            m["content"] = json.dumps(data)
+    return changed
+
+
+def run_once(model, s: Scenario, profile, effort, max_steps=8, service=None):
+    """Run one graded task. `service` overrides the model service (e.g. a guarded service in front of the same model)."""
     cat = catalog_for(s)
     trace = {"inventory_checked": set(), "answer": None}
     usage = {"input": 0, "output": 0, "cached": 0, "reasoning": 0}
+    events = []
     c = client(profile)
-    fq = f"system.ai.{model}"
+    fq = service or f"system.ai.{model}"
     t0 = time.monotonic()
     steps = tool_calls = 0
     error = None
+
+    def event(kind, **kw):
+        events.append({"t": round(time.monotonic() - t0, 2), "kind": kind, **kw})
+
     try:
         if model in OPENAI_RESPONSES:
             tools = [{"type": "function", "strict": True, **t} for t in TOOLS]
@@ -243,6 +285,7 @@ def run_once(model, s: Scenario, profile, effort, max_steps=8):
                     usage["output"] += u.output_tokens or 0
                     usage["cached"] += getattr(getattr(u, "input_tokens_details", None), "cached_tokens", 0) or 0
                     usage["reasoning"] += getattr(getattr(u, "output_tokens_details", None), "reasoning_tokens", 0) or 0
+                event("model", step=steps, tokens=(u.input_tokens + u.output_tokens) if u else None)
                 calls = [o for o in r.output if o.type == "function_call"]
                 for o in r.output:
                     if o.type == "message":
@@ -251,14 +294,17 @@ def run_once(model, s: Scenario, profile, effort, max_steps=8):
                     break
                 for o in calls:
                     tool_calls += 1
+                    args = json.loads(o.arguments or "{}")
                     inp.append({"type": "function_call", "name": o.name, "call_id": o.call_id, "arguments": o.arguments})
-                    out = run_tool(o.name, json.loads(o.arguments or "{}"), cat, trace)
+                    out = run_tool(o.name, args, cat, trace)
+                    event("tool", name=o.name, detail=_brief(o.name, args))
                     inp.append({"type": "function_call_output", "call_id": o.call_id, "output": json.dumps(out)})
                 if trace["answer"] is not None:
                     break
         else:
             tools = [{"type": "function", "function": t} for t in TOOLS]
             msgs = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": s.prompt}]
+            retried = False
             for steps in range(1, max_steps + 1):
                 r = call_with_retry(lambda: c.chat.completions.create(model=fq, messages=msgs, tools=tools, max_tokens=4000))
                 u = r.usage
@@ -266,6 +312,16 @@ def run_once(model, s: Scenario, profile, effort, max_steps=8):
                     usage["input"] += u.prompt_tokens or 0
                     usage["output"] += u.completion_tokens or 0
                     usage["cached"] += getattr(getattr(u, "prompt_tokens_details", None), "cached_tokens", 0) or 0
+                policy = _policy(r)
+                if policy:
+                    reason = policy.get("reason") if isinstance(policy, dict) else str(policy)
+                    event("guardrail", detail=str(reason or "Denied by a Unity Gateway service policy")[:300], policy=policy)
+                    if retried or not _withhold_untrusted(msgs):
+                        break
+                    retried = True
+                    event("retry", detail="Untrusted product descriptions withheld; structured catalog data kept")
+                    continue
+                event("model", step=steps, tokens=(u.prompt_tokens + u.completion_tokens) if u else None)
                 m = r.choices[0].message
                 # Keep the provider's raw assistant message (e.g. Gemini thought signatures on tool calls).
                 raw = m.model_dump(exclude_none=True)
@@ -282,19 +338,23 @@ def run_once(model, s: Scenario, profile, effort, max_steps=8):
                     except json.JSONDecodeError:
                         args = {}
                     out = run_tool(tc.function.name, args, cat, trace)
+                    event("tool", name=tc.function.name, detail=_brief(tc.function.name, args))
                     msgs.append({"role": "tool", "tool_call_id": tc.id, "content": json.dumps(out)})
                 if trace["answer"] is not None:
                     break
     except Exception as e:
         error = str(e)[:300]
+        event("error", detail=error)
     latency = time.monotonic() - t0
     ok, reasons = (False, ["error: " + error]) if error else grade(s, cat, trace)
+    event("grade", ok=ok, detail="; ".join(reasons) if reasons else "All checks passed")
     pin, pout, pcache = PRICES_DBU[model]
     uncached = max(usage["input"] - usage["cached"], 0)
     cost = (uncached * pin + usage["cached"] * pcache + usage["output"] * pout) / 1e6 * DBU_USD
     return {"model": model, "provider": PROVIDER[model], "scenario": s.id, "pass": ok, "reasons": reasons,
             "latency_s": round(latency, 3), "steps": steps, "tool_calls": tool_calls, "usage": usage,
-            "cost_usd": cost, "answer": trace["answer"], "error": error}
+            "cost_usd": cost, "answer": trace["answer"], "error": error, "service": fq, "events": events,
+            "guardrail_fired": any(e["kind"] == "guardrail" for e in events)}
 
 
 def summarize(rows, scen):

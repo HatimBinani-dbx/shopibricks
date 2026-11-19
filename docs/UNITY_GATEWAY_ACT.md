@@ -17,16 +17,25 @@ A second deployment runs these views next to the reference app, in its own works
 
 Operations analytics (Lakeflow pipeline, Genie, Vector Search, AI/BI dashboard) are not provisioned in the showcase. Show them from the reference workspace.
 
-## Suggested timing (Hatim, 25:00 to 50:00)
+## Talk track
 
-| Time | Screen | Talk track |
+The timed script, with one takeaway per panel and the closing ice breaker, is in [PITCH_DEVELOPER_ACT.md](PITCH_DEVELOPER_ACT.md).
+
+Panels: **Architecture** (`#architecture`), **Unity Gateway** (`#gateway`), **Model lab** (`#lab`), **Codex** (`#codex`). Presenter settings (anonymize non-OpenAI models, costs, animations) open from the gear next to the tabs, or with Shift + comma.
+
+## Demo services
+
+Three small model services sit next to the concierge service, in the same schema. Override them with `SHOPIBRICKS_UG_RESTRICTED_SERVICE`, `SHOPIBRICKS_UG_RATELIMIT_SERVICE` and `SHOPIBRICKS_UG_GUARDED_SERVICE`.
+
+| Service | Purpose | Setup |
 |---|---|---|
-| 25:00 to 36:00 | Concierge, then checkout (unchanged, compressed) | Same as the existing runbook. |
-| 36:00 to 38:00 | Developer studio, Protocols | One tool call, one model event. "Every model call you just saw went through one gateway." |
-| 38:00 to 42:00 | Unity Gateway | The map: who calls (app agents, developers, business users, Agent Bricks), what is governed (model services, MCP services, UC data). Then the six controls of the concierge service, read live. Click **GPT-6.1 Terra** under "Promote a model to primary", ask the concierge again, switch back to Luna. No code change, no redeploy. |
-| 42:00 to 46:00 | Model lab | "Cost per successful task, not price per token." Scatter, ranking, heatmap. Run **Prompt injection in catalog** live on Luna, Terra, gpt-oss-120b and one anonymized model: gpt-oss-120b usually follows the injected instruction, which leads to guardrails. Close with the three public benchmarks. |
-| 46:00 to 49:00 | Terminal, then Codex tab | `scripts/codex-showcase.sh` and ask Codex something about the repo. Explain identity, allow-list, limits, attribution. Show sessions in the Codex tab (usage lands with a delay of a few minutes, so show a session started before the talk). |
-| 49:00 to 50:00 | Back to the shopper journey | Questions. |
+| `finance_reserved` | Identity demo: the app service principal has no `EXECUTE` grant, so the call is denied | GPT-6 Astra destination, no grant to the app |
+| `ratelimit_1rpm` | Rate-limit demo: 1 request per minute for the service and per user. The button sends spikes of 5 back-to-back requests | GPT-6 Luna destination, app has `EXECUTE` |
+| `guarded_oss` | Guardrail story: gpt-oss-120b behind a Jailbreak service policy, with an inference table | Attach the policy once in the UI (Unity Gateway › Models › guarded_oss › Policies › Jailbreak, input, Deny). There is no public API for service policies |
+
+When a service policy denies a chat turn, the gateway answers HTTP 200 with a top-level `databricks_service_policy` object. The lab harness (`app/server/ug_bench.py`) records it as a guardrail event, withholds the free-text product descriptions from that turn's tool results and retries once with the structured catalog data.
+
+The rate-limit demo sends requests one by one: parallel bursts can pass before the distributed counter updates. Enforcement is approximate across gateway replicas, so a spike of 5 against a 1-per-minute limit typically serves 0 to 3 requests in a variable order, and the limit can take a few spikes to kick in after a quiet period.
 
 ## Model lab method
 
@@ -66,7 +75,7 @@ Read it carefully on stage:
 - gpt-oss-120b followed the injected catalog instruction in 3 of 3 runs.
 - The app anonymizes non-OpenAI models by default (toggle in the Model lab header).
 
-## Public benchmarks shown
+## Public benchmarks (for Q&A, no longer shown in the app)
 
 - [Databricks AI Index](https://www.databricks.com/blog/introducing-databricks-ai-index-state-enterprise-ai-tokenomics): GPT-6 Luna 89.1% task success at about $0.05 per task, the same success as Claude Opus 5.5 at $1.62. Claude Fable 5.1 scores higher (96.0%) at $7.47.
 - [OfficeQA Pro V2](https://www.databricks.com/blog/introducing-officeqa-pro-v2-new-benchmark-enterprise-grounded-reasoning): GPT-5.6 Sol on Codex 33.3% at $4.70 per rollout versus Sonnet 5 on Claude Code 15.6% at $5.01.
