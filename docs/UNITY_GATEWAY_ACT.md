@@ -40,7 +40,7 @@ When a service policy denies a chat turn, the gateway answers HTTP 200 with a to
 
 A denied turn never reaches the model, so it is **not** written to the inference table: the table only holds the turns that were served. The app keeps the last decision returned by the gateway and shows it in the Guardrails card and at the top of the audit step.
 
-A second policy on `guarded_oss` masks PII (email addresses and credit card numbers) instead of denying: the model receives `[EMAIL_ADDRESS]` and `[CREDIT_CARD]`, and the masked request is what the inference table stores. The response carries no policy object, so the one-click test under the injection story asks the model to quote the contact and card it received, then reads the logged request by `x-request-id` (`GET /api/ug/received`).
+A second policy on `guarded_oss` masks PII (email addresses and credit card numbers) instead of denying: the model receives `[EMAIL_ADDRESS]` and `[CREDIT_CARD]`, and the masked request is what the inference table stores. The response carries no policy object, so the one-click test under the injection story asks the model to quote the contact and card it received, so the masking shows in the answer itself. `GET /api/ug/received?id=<x-request-id>` returns the logged (masked) request if needed for Q&A.
 
 The outage drill in the routing card is a simulation: a real failover needs a primary that returns 429 or 5xx, and an unreachable custom provider returns 400, which does not trigger fallback.
 

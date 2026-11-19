@@ -1,5 +1,5 @@
 import React,{useMemo,useState} from 'react';
-import {AlertCircle,ArrowRight,BarChart3,CheckCircle2,ChevronDown,Code2,Database,ExternalLink,FileText,Gauge,KeyRound,Layers,Play,RefreshCw,Route,ShieldAlert,ShieldCheck,Sparkles,Terminal,Users,Wallet,Maximize2,X} from 'lucide-react';
+import {AlertCircle,ArrowRight,BookOpen,BarChart3,CheckCircle2,ChevronDown,Code2,Database,ExternalLink,FileText,Gauge,KeyRound,Layers,Play,RefreshCw,Route,ShieldAlert,ShieldCheck,Sparkles,Terminal,Users,Wallet,Maximize2,X} from 'lucide-react';
 import {OpenAIMark} from '../Brand';
 import {PayloadList,useGuardrail} from './payloads';
 import {GuardrailStory,PiiTest} from './GuardrailStory';
@@ -19,11 +19,12 @@ export function GatewayMap({overview}:{overview?:Overview}){
  return <div className="ug-map panel" aria-label="Unity Gateway architecture">
   <div className="ug-map-col"><span className="eyebrow">WHO CALLS</span>{CALLERS.map(([Icon,t,sub])=><div className="ug-node" key={t}><Icon size={16}/><div><strong>{t}</strong><small>{sub}</small></div></div>)}</div>
   <ArrowRight className="ug-arrow" size={20}/>
-  <div className="ug-core"><span className="eyebrow">ONE CONTROL PLANE</span><h3>Unity Gateway</h3><p>Governance built on Unity Catalog, for models, MCP tools and coding agents.</p><div className="ug-chips">{['Identity & grants','Routing & fallback','Rate limits','Budgets','Guardrails','Payload logging','Usage & cost'].map(c=><span key={c}>{c}</span>)}</div></div>
+  <div className="ug-core"><span className="eyebrow">ONE CONTROL PLANE</span><h3>Unity Gateway</h3><p>Governance built on Unity Catalog, for models, MCP tools, skills and coding agents.</p><div className="ug-chips">{['Identity & grants','Routing & fallback','Rate limits','Budgets','Guardrails','Payload logging','Usage & cost'].map(c=><span key={c}>{c}</span>)}</div></div>
   <ArrowRight className="ug-arrow" size={20}/>
   <div className="ug-map-col"><span className="eyebrow">WHAT IT GOVERNS</span>
    <div className="ug-node"><OpenAIMark/><div><strong>{models.length?`${models.length} model services`:'Model services'}</strong><small>{shown.map(([p,n])=>`${p} ${n}`).join(' · ')||'system.ai'}</small></div></div>
    <div className="ug-node"><Code2 size={16}/><div><strong>{mcp.length?`${mcp.length} MCP services`:'MCP services'}</strong><small>{mcp.slice(0,4).map(m=>m.name.split('.').pop()).join(', ')||'Governed tools'}</small></div></div>
+   <div className="ug-node"><BookOpen size={16}/><div><strong>Skills</strong><small>Shared in Unity Catalog · loaded by coding agents · Beta</small></div></div>
    <div className="ug-node"><Database size={16}/><div><strong>Unity Catalog data</strong><small>Same permissions, same lineage</small></div></div>
   </div>
  </div>;

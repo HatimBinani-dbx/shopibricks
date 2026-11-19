@@ -1,7 +1,7 @@
 import React,{useMemo,useState} from 'react';
 import {ArrowUpRight,X} from 'lucide-react';
 
-type NodeId='shopper'|'chatgpt'|'merchant'|'developer'|'agui'|'concierge'|'catalog'|'inventory'|'checkout'|'analyst'|'mcp'|'acp'|'gateway'|'luna'|'sol'|'catalogai'|'lakebase'|'vector'|'genie'|'lakeflow'|'uc'|'mlflow'|'inference'|'usage'|'app';
+type NodeId='shopper'|'chatgpt'|'merchant'|'developer'|'agui'|'concierge'|'catalog'|'inventory'|'checkout'|'analyst'|'mcp'|'acp'|'skills'|'gateway'|'luna'|'sol'|'catalogai'|'lakebase'|'vector'|'genie'|'lakeflow'|'uc'|'mlflow'|'inference'|'usage'|'app';
 type N={id:NodeId;x:number;y:number;w:number;h:number;title:string;sub?:string;kind:'channel'|'agent'|'protocol'|'gateway'|'model'|'data'|'obs'|'group'};
 type E={id:string;from:NodeId;to:NodeId;dashed?:boolean;curve?:'right'|'bus'|'side'|'under';lane?:number;y?:number;label?:string};
 type Detail={what:string;here:string[];where?:string;tag?:string};
@@ -19,11 +19,12 @@ const NODES:N[]=[
  {id:'checkout',x:246,y:248,w:128,h:42,title:'Checkout agent',kind:'agent'},
  {id:'analyst',x:384,y:248,w:128,h:42,title:'Merchant analyst',kind:'agent'},
   {id:'gateway',x:578,y:96,w:168,h:300,title:'Unity Gateway',sub:'One control plane',kind:'gateway'},
- {id:'luna',x:792,y:112,w:168,h:50,title:'GPT-6 Luna',sub:'Concierge · primary',kind:'model'},
- {id:'sol',x:792,y:186,w:168,h:50,title:'GPT-6.1 Sol',sub:'Fallback · Codex',kind:'model'},
- {id:'catalogai',x:792,y:260,w:168,h:50,title:'system.ai',sub:'58 governed model services',kind:'model'},
- {id:'mcp',x:792,y:330,w:168,h:46,title:'MCP services',sub:'Commerce tools · /mcp',kind:'protocol'},
- {id:'acp',x:792,y:392,w:168,h:46,title:'ACP merchant API',sub:'/checkout_sessions',kind:'protocol'},
+ {id:'luna',x:792,y:100,w:168,h:44,title:'GPT-6 Luna',sub:'Concierge · primary',kind:'model'},
+ {id:'sol',x:792,y:152,w:168,h:44,title:'GPT-6.1 Sol',sub:'Fallback · Codex',kind:'model'},
+ {id:'catalogai',x:792,y:204,w:168,h:44,title:'system.ai',sub:'58 governed model services',kind:'model'},
+ {id:'mcp',x:792,y:256,w:168,h:44,title:'MCP services',sub:'Commerce tools · /mcp',kind:'protocol'},
+ {id:'acp',x:792,y:308,w:168,h:44,title:'ACP merchant API',sub:'/checkout_sessions',kind:'protocol'},
+ {id:'skills',x:792,y:360,w:168,h:44,title:'Skills',sub:'Shared in Unity Catalog · Beta',kind:'protocol'},
  {id:'lakebase',x:1008,y:40,w:172,h:50,title:'Lakebase',sub:'Products · carts · orders',kind:'data'},
  {id:'vector',x:1008,y:114,w:172,h:50,title:'Vector Search',sub:'Semantic catalog',kind:'data'},
  {id:'genie',x:1008,y:188,w:172,h:50,title:'Genie',sub:'Governed business Q&A',kind:'data'},
@@ -39,7 +40,7 @@ const EDGES:E[]=[
  {id:'con-catalog',from:'concierge',to:'catalog'},{id:'con-inv',from:'concierge',to:'inventory'},{id:'con-checkout',from:'concierge',to:'checkout'},{id:'con-analyst',from:'concierge',to:'analyst'},
  {id:'tools-gw',from:'app',to:'gateway',curve:'side',y:244,label:'tool calls'},{id:'gw-mcp',from:'gateway',to:'mcp'},
  {id:'mcp-lakebase',from:'mcp',to:'lakebase'},{id:'mcp-vector',from:'mcp',to:'vector'},
- {id:'analyst-genie',from:'analyst',to:'genie',curve:'bus',lane:5},{id:'gw-acp',from:'gateway',to:'acp'},{id:'acp-lakebase',from:'acp',to:'lakebase'},
+ {id:'analyst-genie',from:'analyst',to:'genie',curve:'bus',lane:5},{id:'gw-acp',from:'gateway',to:'acp'},{id:'gw-skills',from:'gateway',to:'skills',dashed:true},{id:'acp-lakebase',from:'acp',to:'lakebase'},
  {id:'chatgpt-gw',from:'chatgpt',to:'gateway',curve:'under',y:362,dashed:true},{id:'merchant-con',from:'merchant',to:'concierge'},{id:'dev-gw',from:'developer',to:'gateway',curve:'under',y:384},
  {id:'gw-inference',from:'gateway',to:'inference'},{id:'gw-usage',from:'gateway',to:'usage'},{id:'app-mlflow',from:'app',to:'mlflow'},
  {id:'lakebase-lakeflow',from:'lakebase',to:'lakeflow',curve:'right'},{id:'lakeflow-genie',from:'lakeflow',to:'genie'},
@@ -58,7 +59,8 @@ const DETAILS:Record<Exclude<NodeId,'app'>,Detail>={
  analyst:{what:'Answers merchant questions from operational and Lakehouse data.',here:['get_merchant_metrics or ask_genie','Always states period, source and units'],where:'server/agents.ts',tag:'Specialist'},
  mcp:{what:'The commerce tools as an MCP server. Unity Gateway governs MCP services like model services: grants, rate limits, guardrails on tool calls and results, usage.',here:['search_products · semantic_search · get_inventory · quote_cart · get_merchant_metrics','Streamable HTTP at /mcp, registrable as a Unity Catalog MCP service'],where:'server/mcp.ts',tag:'MCP · governed'},
  acp:{what:'Agentic Commerce Protocol merchant endpoints: create, update, complete, cancel. Exposed through Unity Gateway like the MCP tools: identity, limits and audit on every checkout call.',here:['Idempotency keys and authoritative totals','Transactional stock checks in Lakebase'],where:'server/index.ts · server/pricing.ts',tag:'ACP · governed · sandbox'},
- gateway:{what:'Governance for every model call, MCP tool call and merchant API call: identity and grants, routing and fallback, rate limits, guardrails, payload logging and usage.',here:['The concierge calls a governed model service, not a raw endpoint','Switch models without a code change'],where:'server/gateway_worker.py · server/unity-gateway.ts',tag:'Unity Gateway'},
+ gateway:{what:'Governance for every model call, MCP tool call and merchant API call, and for the skills agents load: identity and grants, routing and fallback, rate limits, guardrails, payload logging and usage.',here:['The concierge calls a governed model service, not a raw endpoint','Switch models without a code change'],where:'server/gateway_worker.py · server/unity-gateway.ts',tag:'Unity Gateway'},
+ skills:{what:'Unity Gateway Skills: a shared skill registry in Unity Catalog. Coding agents discover and load only the skills the signed-in user may read, through the databricks-skill-registry MCP server.',here:['Published to a Unity Catalog schema, shared with grants (READ VOLUME)','ug codex connects Codex to the registry; admins choose which shared skills are provided'],tag:'Skills · Beta'},
  luna:{what:'GPT-6 Luna serves the concierge: the lowest cost per successful task in our model lab.',here:['Primary destination of the concierge service'],tag:'OpenAI'},
  sol:{what:'GPT-6.1 Sol takes over automatically on 429 or 5xx, and powers Codex sessions.',here:['Fallback destination · same governance'],tag:'OpenAI'},
  catalogai:{what:'Every foundation model in system.ai is a Unity Catalog securable with the same controls.',here:['OpenAI, open-weights and other providers'],tag:'Model services'},
@@ -66,7 +68,7 @@ const DETAILS:Record<Exclude<NodeId,'app'>,Detail>={
  vector:{what:'Semantic product search over the governed catalog.',here:['Hybrid query from semantic_search'],tag:'Data'},
  genie:{what:'Natural-language analytics with governed SQL, under the user’s permissions.',here:['Called by the merchant analyst when asked'],tag:'Data · AI/BI'},
  lakeflow:{what:'Streaming pipeline that turns commerce events into gold Delta tables.',here:['gold_commerce_daily · gold_product_demand'],where:'resources/commerce.pipeline.yml',tag:'Data · Lakehouse'},
- uc:{what:'Unity Catalog governs data, models, MCP tools and agents with one permission model and lineage.',here:['Tables, volumes, model services, MCP services and agents','Lineage and audit across all of them'],tag:'Governance'},
+ uc:{what:'Unity Catalog governs data, models, MCP tools, skills and agents with one permission model and lineage.',here:['Tables, volumes, model services, MCP services, skills and agents','Lineage and audit across all of them'],tag:'Governance'},
  mlflow:{what:'MLflow traces for every agent run, stored in Unity Catalog.',here:['Spans for model calls and tools'],where:'server/trace_config.py',tag:'Observability'},
  inference:{what:'Inference tables log each request and response of a model service to Delta.',here:['Audit, evaluation and fine-tuning datasets'],tag:'Observability'},
  usage:{what:'System table with every gateway request: who, which model, tokens, latency, routing and coding-agent session.',here:['Feeds the Unity Gateway and Codex pages'],tag:'Observability'},
@@ -101,6 +103,7 @@ const SCENARIOS:{id:string;title:string;steps:Step[]}[]=[
  ]},
  {id:'codex',title:'Developer with Codex',steps:[
   {edges:['dev-gw'],caption:'A developer runs Codex on this repository with ug codex.'},
+  {edges:['gw-skills'],caption:'Codex loads the team’s shared skills from Unity Catalog, only those the developer is allowed to read.'},
   {edges:['gw-sol'],caption:'Requests reach GPT-6.1 Sol through the same Unity Gateway, under the developer’s identity.'},
   {edges:['gw-usage'],caption:'Sessions, tokens and prompt-cache hits are attributed in system.ai_gateway.usage.'},
  ]},
@@ -139,7 +142,7 @@ export function AppArchitecture({health,onProbeMcp}:{health?:{database?:string;m
   <div className="arch-stage">
    <svg viewBox="0 0 1200 590" role="img" aria-label="Architecture of ShopiBricks: channels, agents and protocols, Unity Gateway, OpenAI models and MCP tools, data and observability">
     <defs><marker id="arch-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L8,4 L0,8 z" fill="currentColor"/></marker></defs>
-    {[['CHANNELS',20],['APP · AGENTS · PROTOCOLS',246],['GOVERNANCE',578],['OPENAI MODELS · TOOLS',792],['DATA',1008]].map(([t,x])=><text key={String(t)} x={Number(x)} y={16} className="arch-col">{t}</text>)}
+    {[['CHANNELS',20],['APP · AGENTS · PROTOCOLS',246],['GOVERNANCE',578],['MODELS · TOOLS · SKILLS',792],['DATA',1008]].map(([t,x])=><text key={String(t)} x={Number(x)} y={16} className="arch-col">{t}</text>)}
     <text x={246} y={510} className="arch-col">OBSERVABILITY</text>
     {NODES.filter(n=>n.kind==='group').map(n=><g key={n.id}><rect x={n.x} y={n.y} width={n.w} height={n.h} rx={16} className="arch-group"/><text x={n.x+14} y={n.y+n.h-10} className="arch-group-label">{n.title}</text></g>)}
     {EDGES.map(e=>{const on=active.has(e.id);const path=edgePath(e);return <g key={e.id} className={`arch-edge ${on?'on':''} ${e.dashed?'dashed':''}`}>

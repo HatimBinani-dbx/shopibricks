@@ -1,5 +1,5 @@
 import React,{useState} from 'react';
-import {api,post} from '../api';
+import {post} from '../api';
 import {AlertCircle,ArrowRight,Play,RefreshCw,ShieldAlert,ShieldCheck,ShoppingBag,Lock} from 'lucide-react';
 import {Waiter,clock,prettyModel,shortService,useModelLabel,OTHER_MODELS,type LabRow} from './shared';
 import {INJECTION,ResultCard,TOTE,runLab} from './LabResults';
@@ -77,26 +77,19 @@ function Marked({text,re,cls}:{text:string;re:RegExp;cls:string}){return <>{text
 
 /** One-click check of the PII policy on the guarded service: emails and card numbers are masked before the model. */
 export function PiiTest(){
- const [busy,setBusy]=useState(false);const [res,setRes]=useState<PiiResult>();const [received,setReceived]=useState<string>();const [reading,setReading]=useState(false);const [err,setErr]=useState('');
- async function run(){setBusy(true);setErr('');setRes(undefined);setReceived(undefined);
-  let r:PiiResult;try{r=await post<PiiResult>('/api/ug/try',{demo:'pii'});setRes(r);}catch(e){setErr(e instanceof Error?e.message:'Failed');setBusy(false);return;}
-  setBusy(false);if(!r.request_id)return;setReading(true);
-  // The masked request lands in the inference table within seconds.
-  for(let i=0;i<12;i++){await new Promise(x=>setTimeout(x,i?2000:1200));try{const d=await api<{pending:boolean;received?:string}>(`/api/ug/received?id=${r.request_id}`);if(!d.pending){setReceived(d.received||'');break;}}catch{/* keep polling */}}
-  setReading(false);}
+ const [busy,setBusy]=useState(false);const [res,setRes]=useState<PiiResult>();const [err,setErr]=useState('');
+ async function run(){setBusy(true);setErr('');setRes(undefined);try{setRes(await post<PiiResult>('/api/ug/try',{demo:'pii'}));}catch(e){setErr(e instanceof Error?e.message:'Failed');}finally{setBusy(false);}}
  const masked=!!res?.text&&MASK.test(res.text);MASK.lastIndex=0;
  return <section className="panel pii-test" id="pii">
   <div className="panel-heading"><div><span className="eyebrow">GUARDRAILS · SENSITIVE DATA · LIVE</span><h3>PII never reaches the model</h3></div><Lock size={18}/></div>
   <p className="muted">A PII policy on <code>{shortService(res?.service||'guarded_oss')}</code> masks email addresses and card numbers in every request, before the model sees it. No change in the agent.</p>
-  <div className="ug-try-row"><button className="primary-button" disabled={busy||reading} onClick={()=>void run()}>{busy?<><RefreshCw size={13} className="spin"/> Sending…</>:<><Play size={13}/> Send an email and a card number</>}</button></div>
+  <div className="ug-try-row"><button className="primary-button" disabled={busy} onClick={()=>void run()}>{busy?<><RefreshCw size={13} className="spin"/> Sending…</>:<><Play size={13}/> Send an email and a card number</>}</button></div>
   {err&&<div className="ug-alert"><AlertCircle size={15}/>{err}</div>}
   {busy&&<Waiter text="Sending a checkout note with an email and a card number…" sub="Through the guarded model service. About 3 seconds."/>}
   {res&&<div className="pii-grid">
    <div><span className="eyebrow">1 · THE AGENT SENT</span><p><Marked text={res.prompt} re={RAW} cls="pii-raw"/></p></div>
    <ArrowRight size={18} className="pii-arrow"/>
-   <div><span className="eyebrow">2 · THE MODEL RECEIVED · INFERENCE TABLE</span>{received!==undefined?<p><Marked text={received} re={MASK} cls="pii-masked"/></p>:reading?<Waiter text="Reading the inference table…" sub="The logged request, as the model received it."/>:<p className="muted small">Not logged yet.</p>}</div>
-   <ArrowRight size={18} className="pii-arrow"/>
-   <div><span className="eyebrow">3 · THE MODEL ANSWERED</span><p>{res.text?<Marked text={res.text} re={MASK} cls="pii-masked"/>:res.error||'—'}</p><small className="muted">{(res.latency_ms/1000).toFixed(1)} s · {masked?'masked by Unity Gateway':'no masking detected'}</small></div>
+   <div><span className="eyebrow">2 · THE MODEL ANSWERED</span><p>{res.text?<Marked text={res.text} re={MASK} cls="pii-masked"/>:res.error||'—'}</p><small className="muted">{(res.latency_ms/1000).toFixed(1)} s · {masked?'masked by Unity Gateway':'no masking detected'}</small></div>
   </div>}
  </section>;
 }

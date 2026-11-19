@@ -372,7 +372,7 @@
 .lab-decision{border:1px solid #f3c4bd;background:#fff6f4;border-radius:10px;padding:12px 14px;margin-bottom:14px;display:grid;gap:6px}
 .lab-decision>div{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.lab-decision small{color:#6b6f76}.lab-decision p{margin:0;font-size:14px}
 .pii-test .ug-try-row{margin:10px 0}
-.pii-grid{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:14px;align-items:start;margin-top:12px}
+.pii-grid{display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:start;margin-top:12px}
 .pii-grid>div{border:1px solid var(--line,#e5e2dc);border-radius:10px;padding:12px 14px;background:#fff;display:grid;gap:8px}
 .pii-grid p{margin:0;font-size:14px;line-height:1.5}.pii-arrow{align-self:center;color:#8a8f98}
 mark.pii-raw{background:#ffe1dc;color:#b3261e;border-radius:3px;padding:0 2px}

@@ -72,8 +72,8 @@ Action : cliquer **See it stop a real prompt injection** dans la carte Guardrail
 4. **Open the audit trail**.
    > « En haut, la décision de la Gateway : la policy, la phase, la raison. En dessous, l'inference table : seuls les tours propres y figurent. Le tour empoisonné n'a jamais atteint le modèle. »
 
-5. Juste en dessous, panneau **PII never reaches the model** : cliquer **Send an email and a card number** (environ 4 s, puis la preuve de l'inference table en quelques secondes).
-   > « Deuxième garde-fou, même service : une policy PII. L'agent envoie un email et un numéro de carte. Au milieu, ce que le modèle a réellement reçu, lu dans l'inference table : masqué. À droite, sa réponse : il n'a jamais vu les vraies valeurs. Toujours sans toucher au code de l'agent. »
+5. Juste en dessous, panneau **PII never reaches the model** : cliquer **Send an email and a card number** (environ 4 s).
+   > « Deuxième garde-fou, même service : une policy PII. À gauche, l'agent envoie un email et un numéro de carte. À droite, la réponse du modèle : il n'a reçu que des valeurs masquées, il n'a jamais vu les vraies. Toujours sans toucher au code de l'agent. »
 
 Phrase de repli, si le guardrail ne se déclenche pas en live :
 > « Le modèle n'est pas le seul rempart : la Gateway ajoute une couche que l'on configure une fois, pour tous les agents. »
@@ -96,7 +96,7 @@ Si le temps le permet : lancer une comparaison libre en bas de page (environ 10 
 
 Action : ouvrir **Codex**. Montrer la ligne **Setup, in one line** en haut, puis cliquer la plus longue session dans l'explorateur.
 
-> « Pour le développeur, c'est une ligne : `ug codex`. Il se connecte avec son identité Databricks, sans clé d'API. »
+> « Pour le développeur, c'est une ligne : `ug codex`. Il se connecte avec son identité Databricks, sans clé d'API. Et la Gateway lui fournit aussi les skills de l'équipe, partagés dans Unity Catalog : il ne charge que ceux qu'il a le droit de lire. »
 
 > « Pour préparer cette démo, on a travaillé sur ce repo avec Codex, branché sur la même Gateway. Voici une vraie session : 87 requêtes en 27 minutes sur GPT-6.1 Sol. Chaque barre est une requête. Le contexte grossit à chaque tour, mais le bleu, c'est ce qui est servi par le cache d'OpenAI : 97 %. Résultat : 2,31 $ au lieu de 23 $. »
 
@@ -124,7 +124,7 @@ Rendre la main pour les questions et le cocktail.
 
 ## Avant de monter sur scène
 
-- [ ] **15 minutes avant : lancer `scripts/warmup-showcase.sh`** (environ 4 minutes). Le script démarre l'app et le warehouse (arrêt automatique à 2 h), remet le concierge sur GPT-6 Luna avec Sol en fallback, remet la politique de routage par défaut, puis joue une fois chaque démo (concierge, 12 requêtes de routage, identité, rate limit, Model lab, attaque, relance gardée) pour chauffer les modèles et remplir les tables d'usage. Il se termine par une liste de contrôle : tout doit être ✓. Le premier passage à froid peut prendre 2 minutes sur l'attaque ; après, elle prend 10 à 15 s.
+- [ ] **15 minutes avant : lancer `scripts/warmup-showcase.sh`** (environ 4 minutes). Le script démarre l'app et le warehouse (arrêt automatique à 2 h), remet le concierge sur GPT-6 Luna avec Sol en fallback, remet la politique de routage par défaut, puis joue une fois chaque démo (concierge, 12 requêtes de routage, identité, rate limit, Model lab, attaque, relance gardée, PII) pour chauffer les modèles et remplir les tables d'usage. Il se termine par une liste de contrôle : tout doit être ✓. Le premier passage à froid peut prendre 2 minutes sur l'attaque ; après, elle prend 10 à 15 s.
 - [ ] Réglages présentateur : anonymisation activée, coûts affichés, animations activées, **Fallback mode désactivé**.
 - [ ] Les policies Jailbreak (Deny) et PII (masque emails et cartes) sont attachées à `guarded_oss`. Le warm-up vérifie les deux.
 - [ ] Ouvrir l'app dans le navigateur de présentation et passer une fois sur chaque onglet.
@@ -142,6 +142,7 @@ L'onglet Architecture ne dépend pas de la Gateway : il fonctionne dans les deux
 - **MCP et ACP derrière la Gateway** : l'architecture montre le modèle cible. Les services MCP sont gouvernés par Unity Gateway ; dire « gouvernés », pas « tous les appels d'outils passent aujourd'hui par le même proxy ».
 - **PII** : la policy masque (elle ne refuse pas) les emails et numéros de carte avant le modèle. La requête masquée est celle qui est écrite dans l'inference table.
 - **Guardrails** : les service policies sont en Beta. Un tour refusé n'est pas écrit dans l'inference table, car il n'atteint pas le modèle ; la décision est renvoyée à l'agent avec sa raison.
+- **Skills** : Unity Gateway Skills est en Beta. Les skills sont publiés dans un schéma Unity Catalog et partagés par grants ; `ug` les expose à Codex via le serveur MCP `databricks-skill-registry`. La démo les montre dans les schémas, pas en live.
 - **Benchmarks** : mesurés sur notre tâche, aux prix publics. Aucune source publiée ne mesure le temps d'exécution : ne pas dire « plus rapide ».
 
 ## Chiffres cités (mesurés du 17 au 19/11/2026)
